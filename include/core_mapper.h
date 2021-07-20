@@ -29,5 +29,7 @@ _Bool is_ro(unsigned long addr, mdata_binary_t* s_binary);
 _Bool is_rw(unsigned long addr, mdata_binary_t* s_binary);
 _Bool is_rwx(unsigned long addr, mdata_binary_t* s_binary);
 
+// returns the prot according to the address
+int prot(unsigned long addr, mdata_binary_t* s_binary);
 
 #endif

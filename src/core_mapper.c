@@ -228,7 +228,20 @@ mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary) {
 
 //==
 
-_Bool is_rw(unsigned long addr, mdata_binary_t* s_binary) {
+// returns the prot according to the address
+int prot(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot;
+}
+
+// is writable
+int is_w(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
@@ -238,6 +251,32 @@ _Bool is_rw(unsigned long addr, mdata_binary_t* s_binary) {
 
     return mem_descriptor->prot & PROT_WRITE;
 }
+
+// is read
+int is_r(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot & PROT_READ;
+}
+
+// is executable
+int is_x(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot & PROT_EXEC;
+}
+
+//==
 
 _Bool is_ro(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
@@ -269,7 +308,7 @@ _Bool is_rx(unsigned long addr, mdata_binary_t* s_binary) {
         return false;
     }
 
-    return mem_descriptor->prot & ( PROT_EXEC | PROT_READ);
+    return mem_descriptor->prot & (PROT_EXEC | PROT_READ);
 }
 
 //==

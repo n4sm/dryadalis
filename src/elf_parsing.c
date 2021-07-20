@@ -154,6 +154,16 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->interp = NULL; //useless
     s_binary->base = NULL; // because it's allocated with the use of calloc of
     s_binary->memory_map = NULL;
+    s_binary->state = NULL;
+    s_binary->host_rsp = NULL;
+    s_binary->orig_bytes = NULL;
+    s_binary->dispatcher = 0x0;
+    s_binary->u_handler = NULL;
+    s_binary->curr_hook = 0x0;
+    s_binary->length_trampoline = 0;
+
+    s_binary->state = malloc(sizeof(state_rtime_t));
+    s_binary->orig_bytes = calloc(1, 64); // arbitrary length
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -173,6 +183,14 @@ mdata_binary_t* init_analysis(const char *s) {
 }
 
 int end_analysis(mdata_binary_t *s_binary) {
+    if (s_binary->state) {
+        free(s_binary->state);
+    }
+
+    if (s_binary->orig_bytes) {
+        free(s_binary->orig_bytes);
+    }
+
     free(s_binary->fbinary);
     free(s_binary->s_ph);
     close(s_binary->fd);
