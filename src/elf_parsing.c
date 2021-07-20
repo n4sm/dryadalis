@@ -9,7 +9,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "include/elf_parsing.h"
+#include "../include/elf_parsing.h"
+#include "../include/core_mapper.h"
 
 // is elf ?
 _Bool is_elf(unsigned char *eh_ptr) {
@@ -151,7 +152,8 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->eh = (Elf64_Ehdr* )s_binary->fbinary;
     s_binary->s_ph = alloc_ph(s_binary->eh->e_phnum);
     s_binary->interp = NULL; //useless
-    s_binary->base = NULL; // because it's allocated with the use of calloc of 
+    s_binary->base = NULL; // because it's allocated with the use of calloc of
+    s_binary->memory_map = NULL;
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -175,6 +177,7 @@ int end_analysis(mdata_binary_t *s_binary) {
     free(s_binary->s_ph);
     close(s_binary->fd);
     free_binary(s_binary);
+    free_memory_map(s_binary->memory_map);
     return 0;
 }
 

@@ -9,12 +9,12 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include "include/core_mapper.h"
+#include "../include/core_mapper.h"
+#include "../include/kernel_list.h"
 
 /* Dieu et le Roy */
 
 // *=*=*=*=*=*=*=
-
 
 static char* s_weeb = "1337_wEeB_alW4yS_b4hiNd_tHe_ResEaRcHeR\0";
 static char* s_arch = "x86_64\0"; 
@@ -51,23 +51,32 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
 //manual mapping of a PT_LOAD segment
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
     unsigned long curr_map = 0x0;
+    unsigned long sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map)));
 
     if (!s_binary->base) {
-        if (MAP_FAILED == (s_binary->base = mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))), PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
+        if (MAP_FAILED == (s_binary->base = mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), sz, PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
             return -1;
         }
+        list_add_map(s_binary, 
+                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
+                (unsigned long)s_binary->base,
+                sz);
     } else {
         curr_map = (unsigned long)(s_binary->pie ? (unsigned long)s_binary->base + s_ph->p_vaddr : (unsigned long)s_ph->p_vaddr);
         if (MAP_FAILED == mmap((void *)PAGE_ALIGN(curr_map), PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))), PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset))) {
             return -1;
         }
+        list_add_map(s_binary, 
+                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
+                curr_map,
+                sz);
     }
 
     fprintf(stdout, 
             "[*] %lx - %lx %lx\n", 
             (unsigned long)(curr_map ? PAGE_ALIGN(curr_map) : (unsigned long)s_binary->base), 
-            (unsigned long)((curr_map ? PAGE_ALIGN(curr_map) : (unsigned long)(s_binary->base + (PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))))))), 
-            PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))));
+            (unsigned long)((curr_map ? PAGE_ALIGN(curr_map) : (unsigned long)(s_binary->base)) + sz), 
+            sz);
 
     if (s_ph->p_memsz > s_ph->p_filesz && curr_map) {
         unsigned long map_filesz = curr_map + s_ph->p_filesz;
@@ -75,17 +84,21 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
 
         unsigned long bss_end = PAGE_ROUND((curr_map + s_ph->p_memsz));
 
+        // fprintf(stdout, "[+] %lx - %lx %lx\n", map_filesz, map_end, map_end-map_filesz);
+
         memset((void* )map_filesz,
                0x0,
                map_end - map_filesz);
-
-        fprintf(stdout, "[+] %lx - %lx %lx\n", map_filesz, map_end, map_end-map_filesz);
 
         if (bss_end > map_end) {
             if (MAP_FAILED == mmap((void *)map_end+1, PAGE_ROUND((bss_end - map_end)), PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
                 return -1;
             }
             fprintf(stdout, "[*] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end)));
+            list_add_map(s_binary, 
+                    PROT_READ | PROT_WRITE,
+                    map_end+1,
+                    PAGE_ROUND((bss_end - map_end))); 
         }
     }
 
@@ -196,6 +209,69 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
     fprintf(stdout, "[*] vsdo @ %lx\n", auxvt(&iter[idx], AT_SYSINFO_EHDR));
     return stack;
+}
+
+// *=*=*=*=*=*=*=*=
+
+// check if the page aligned @addr argument is in the doublyt linked list memory_map 
+_Bool is_mapped(unsigned long addr) {
+    return true;
+}
+
+// merge the address space of the target binary and its linker.
+mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
+    if (s_binary->interp) {
+        struct list_head* tmp = malloc(sizeof(struct list_head));
+        tmp->next = s_binary->interp->memory_map->list.next;
+        tmp->prev = &(s_binary->interp->memory_map->list);
+
+        list_splice(tmp, &(s_binary->memory_map->list));
+    }
+
+    return s_binary->memory_map;
+}
+
+// free all the strcutures mem_map_t that belong to a binary
+int free_memory_map(mem_map_t* memory_map) {
+    mem_map_t* curr = NULL;
+
+    list_for_each_entry(curr, &(memory_map->list), list) {
+        free(container_of(curr->list.prev, mem_map_t, list));
+    }
+
+    free(memory_map->list.next);
+
+    return 0;
+} 
+
+// adds a mem_map_t according to the new mapping's arguments
+int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size) {
+    mem_map_t* curr = malloc(sizeof(mem_map_t));
+    curr->prot = prot;
+    curr->addr = PAGE_ALIGN(addr);
+    curr->size = size;
+
+    if (!s_binary->memory_map) {
+        INIT_LIST_HEAD(&(curr->list));
+    } else {
+        list_add(&(curr->list), &(s_binary->memory_map->list));
+    }
+
+    s_binary->memory_map = curr;
+    return 0;
+}
+
+// Prints some mappings
+int log_map(mem_map_t* memory_map) {
+    mem_map_t* curr = NULL;
+
+    list_for_each_entry(curr, &(memory_map->list), list) {
+        fprintf(stdout, "[+] %lx %lx / %lx\n", curr->addr, curr->addr + curr->size, curr->size);
+    }
+
+    fprintf(stdout, "[+] %lx %lx / %lx\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size);
+
+    return 0;
 }
 
 // *=*=*=*=*=*=*=*=

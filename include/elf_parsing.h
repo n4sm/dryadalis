@@ -9,7 +9,16 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 
+#include "kernel_list.h"
+
 // struct
+
+typedef struct mem_map_s {
+    struct list_head list;
+    unsigned long addr;
+    ssize_t size;
+    int prot;
+} mem_map_t;
 
 typedef struct mdata_binary_s {
     unsigned char *fbinary; // malloc pointer to the binary
@@ -21,6 +30,7 @@ typedef struct mdata_binary_s {
     _Bool pie; // is pie ?
     struct mdata_binary_s *interp; // pointer to the real interp mapped
     unsigned char *base; // real base address of the manual mapped binary
+    mem_map_t* memory_map;
 } mdata_binary_t;
 
 // functions
