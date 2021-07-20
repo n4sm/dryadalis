@@ -11,6 +11,7 @@
 
 #include "../include/core_mapper.h"
 #include "../include/elf_parsing.h"
+#include "../include/engine.h"
 
 int main(int argc, char **argv) {
     mdata_binary_t *s_binary = NULL;
@@ -21,6 +22,7 @@ int main(int argc, char **argv) {
     merge_address_space(s_binary);
     fprintf(stdout, "\n");
     log_map(s_binary->memory_map);
+    fprintf(stdout, "Number of bytes up to the first cflow instruction: %x\n", opcodes_cflow((unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base), s_binary->interp));
     exec_binary(s_binary, argv, argc);
     return 0;
 }

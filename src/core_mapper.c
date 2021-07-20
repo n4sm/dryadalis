@@ -8,6 +8,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #include "../include/core_mapper.h"
 #include "../include/kernel_list.h"
@@ -213,10 +214,80 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
 // *=*=*=*=*=*=*=*=
 
-// check if the page aligned @addr argument is in the doublyt linked list memory_map 
-_Bool is_mapped(unsigned long addr) {
-    return true;
+mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* curr = NULL;
+
+    list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
+        if (PAGE_ALIGN(addr) == curr->addr) {
+            return curr;
+        }
+    }
+
+    return (mem_map_t* )-1;
 }
+
+//==
+
+_Bool is_rw(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot & PROT_WRITE;
+}
+
+_Bool is_ro(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot == PROT_READ;
+}
+
+_Bool is_rwx(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot & (PROT_READ | PROT_EXEC | PROT_READ);
+}
+
+_Bool is_rx(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* mem_descriptor = NULL;
+    
+    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+        // if the address is not mapped it's not in read write lul
+        return false;
+    }
+
+    return mem_descriptor->prot & ( PROT_EXEC | PROT_READ);
+}
+
+//==
+
+// check if @addr argument is in the doubly linked list memory_map 
+_Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary) {
+    mem_map_t* curr = NULL;
+
+    list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
+        if (PAGE_ALIGN(addr) == curr->addr) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// *=*=*=*=*=*=*=*=
 
 // merge the address space of the target binary and its linker.
 mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
