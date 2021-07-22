@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <libelf.h>
 #include <elf.h>
+#include <stdbool.h>
 
 #include "elf_parsing.h"
 #include "kernel_list.h"
@@ -17,9 +18,27 @@
 #define OPT_SINGLE_STEP 0x1
 #define OPT_CFLOW 0x2
 
+#define 
+
 // structures
 
 typedef int (*u_callback_t) (mdata_binary_t* s_binary);
+
+typedef struct hashmap_s {
+    unsigned long** value;
+} hashmap_t;
+
+typedef struct dbi_instr_s {
+    _Bool take_callback; // internal field
+    state_rtime_t* state;
+    u_callback_t u_handler;
+    unsigned char* orig_bytes;
+    ssize_t length_trampoline;
+    unsigned char* trampoline;
+    unsigned long curr_hook;
+    unsigned long *host_rsp;
+    hashmap_t* hashmap;
+} dbi_instr_t;
 
 typedef struct state_rtime_s {
     unsigned long rax;
@@ -64,7 +83,7 @@ int hook(unsigned char* patch, unsigned long target);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
 unsigned long craft_hook(mdata_binary_t* s_binary);
 
-int instrument(mdata_binary_t* s_binary, u_callback_t callback, unsigned long target, arg_t* arguments);
+int instrument(mdata_binary_t* s_binary, u_callback_t callback, arg_t* arguments);
 int _instrument(mdata_binary_t* s_binary, unsigned long target, unsigned char* trampoline);
 
 

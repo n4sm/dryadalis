@@ -148,22 +148,25 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->fbinary = malloc(s_binary->len_file);
     read(s_binary->fd, s_binary->fbinary, s_binary->len_file);
 
+    s_binary->dbi_handler = calloc(1, sizeof(dbi_instr_t));
+
     s_binary->filename = s;
     s_binary->eh = (Elf64_Ehdr* )s_binary->fbinary;
     s_binary->s_ph = alloc_ph(s_binary->eh->e_phnum);
     s_binary->interp = NULL; //useless
     s_binary->base = NULL; // because it's allocated with the use of calloc of
     s_binary->memory_map = NULL;
-    s_binary->state = NULL;
-    s_binary->host_rsp = NULL;
-    s_binary->orig_bytes = NULL;
+    s_binary->dbi_handler->state = NULL;
+    s_binary->dbi_handler->host_rsp = NULL;
+    s_binary->dbi_handler->orig_bytes = NULL;
     s_binary->dispatcher = 0x0;
-    s_binary->u_handler = NULL;
-    s_binary->curr_hook = 0x0;
-    s_binary->length_trampoline = 0;
+    s_binary->dbi_handler->u_handler = NULL;
+    s_binary->dbi_handler->curr_hook = 0x0;
+    s_binary->dbi_handler->length_trampoline = 0;
+    s_binary->dbi_handler->trampoline = NULL;
 
-    s_binary->state = malloc(sizeof(state_rtime_t));
-    s_binary->orig_bytes = calloc(1, 64); // arbitrary length
+    s_binary->dbi_handler->state = malloc(sizeof(state_rtime_t));
+    s_binary->dbi_handler->orig_bytes = calloc(1, 64); // arbitrary length
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -183,14 +186,20 @@ mdata_binary_t* init_analysis(const char *s) {
 }
 
 int end_analysis(mdata_binary_t *s_binary) {
-    if (s_binary->state) {
-        free(s_binary->state);
+    if (s_binary->dbi_handler->state) {
+        free(s_binary->dbi_handler->state);
     }
 
-    if (s_binary->orig_bytes) {
-        free(s_binary->orig_bytes);
+    if (s_binary->dbi_handler->orig_bytes) {
+        free(s_binary->dbi_handler->orig_bytes);
     }
 
+    if (s_binary->dbi_handler->trampoline) {
+        free(s_binary->dbi_handler->trampoline);
+    }
+
+    free(s_binary->dbi_handler->hashmap);
+    free(s_binary->dbi_handler);
     free(s_binary->fbinary);
     free(s_binary->s_ph);
     close(s_binary->fd);

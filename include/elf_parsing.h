@@ -29,17 +29,11 @@ typedef struct mdata_binary_s {
     Elf64_Phdr** s_ph; // list of pointer to the program header
     Elf64_Ehdr* eh;
     _Bool pie; // is pie ?
-    _Bool take_callback; // internal field
     struct mdata_binary_s *interp; // pointer to the real interp mapped
     unsigned char *base; // real base address of the manual mapped binary
     mem_map_t* memory_map;
-    state_rtime_t* state;
-    unsigned long *host_rsp;
     unsigned long dispatcher;
-    u_callback_t u_handler;
-    unsigned char* orig_bytes;
-    ssize_t length_trampoline;
-    unsigned long curr_hook;
+    dbi_instr_t* dbi_handler;
 } mdata_binary_t;
 
 // functions
