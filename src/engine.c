@@ -279,6 +279,7 @@ unsigned long eval_target(unsigned char* instruction) {
     count = cs_disasm(handle, buf_insn, size, 0, 0, &insn);
     cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
 
+    cs_detail* details = insn->detail;
 
     cs_free(insn, count); 
 }

@@ -18,7 +18,13 @@
 #define OPT_SINGLE_STEP 0x1
 #define OPT_CFLOW 0x2
 
-#define 
+#define group_make_link(hashmap, group_reg, reg) \
+            for (int i = 0; i < sizeof(group_reg); i++) { \
+                make_link(hashmap, group_reg[i], reg);\
+            }
+
+#define make_link(hashmap, code_reg, reg) \
+            hashmap->value[code_reg] = &(reg)
 
 // structures
 
