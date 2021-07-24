@@ -15,8 +15,7 @@
 
 #include <keystone/keystone.h>
 
-#include "../include/core_mapper.h"
-#include "../include/elf_parsing.h"
+#include "../include/dryadalis_x86.h"
 
 const unsigned long x86_reg_c[] = {
     X86_REG_INVALID,
@@ -71,11 +70,11 @@ const unsigned long x86_reg_c[] = {
 };
 
 hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
-    hashmap->value = calloc(sizeof(unsigned long* ), sizeof(x86_reg_c));
+    hashmap->value = calloc(1, sizeof(x86_reg_c));
 
-    // for (size_t i = 0; i < sizeof(x86_reg_c); i++) {
-    //     hashmap->value[x86_reg_c[i]] = NULL; // useless but it sounds good
-    // }
+    for (size_t i = 0; i < (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])); i++) { // iter through all the elem
+        hashmap->value[x86_reg_c[i]] = &(s_binary->dbi_handler->state->null_entry);
+    }
 
     int group_rax[] = {X86_REG_AL, X86_REG_AH, X86_REG_AX, X86_REG_EAX, X86_REG_RAX};
     group_make_link(hashmap, group_rax, s_binary->dbi_handler->state->rax);

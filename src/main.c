@@ -9,12 +9,15 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include "../include/core_mapper.h"
-#include "../include/elf_parsing.h"
-#include "../include/engine.h"
+#include "../include/dryadalis_x86.h"
+
+int test(void* s_binary) {
+    fprintf(stderr, "rip: %lx\n", ((mdata_binary_t* )s_binary)->dbi_handler->state->rip);
+}
 
 int main(int argc, char **argv) {
     mdata_binary_t *s_binary = NULL;
+    arg_t arguments = {.argc = argc, .argv = argv};
     if (-1 == (long)(s_binary = map_binary(argv[1])))
         return -1;
 
@@ -22,7 +25,6 @@ int main(int argc, char **argv) {
     merge_address_space(s_binary);
     fprintf(stdout, "\n");
     log_map(s_binary->memory_map);
-    fprintf(stdout, "Number of bytes up to the first cflow instruction: %x\n", opcodes_cflow((unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base), s_binary->interp));
-    exec_binary(s_binary, argv, argc);
+    instrument(s_binary, test, &arguments);
     return 0;
 }

@@ -9,8 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "../include/elf_parsing.h"
-#include "../include/core_mapper.h"
+#include "../include/dryadalis_x86.h"
 
 // is elf ?
 _Bool is_elf(unsigned char *eh_ptr) {
@@ -149,6 +148,9 @@ mdata_binary_t* init_analysis(const char *s) {
     read(s_binary->fd, s_binary->fbinary, s_binary->len_file);
 
     s_binary->dbi_handler = calloc(1, sizeof(dbi_instr_t));
+    s_binary->dbi_handler->state = calloc(1, sizeof(state_rtime_t));
+    s_binary->dbi_handler->hashmap = calloc(1, sizeof(hashmap_t));
+    s_binary->dbi_handler->hashmap = init_hashmap(s_binary->dbi_handler->hashmap, s_binary);
 
     s_binary->filename = s;
     s_binary->eh = (Elf64_Ehdr* )s_binary->fbinary;
@@ -156,17 +158,24 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->interp = NULL; //useless
     s_binary->base = NULL; // because it's allocated with the use of calloc of
     s_binary->memory_map = NULL;
-    s_binary->dbi_handler->state = NULL;
     s_binary->dbi_handler->host_rsp = NULL;
-    s_binary->dbi_handler->orig_bytes = NULL;
+
+    s_binary->dbi_handler->dump = calloc(1, sizeof(hook_t));
+    s_binary->dbi_handler->dump->orig_bytes = calloc(1, 64);
+    s_binary->dbi_handler->dump->length = 0x0;
+    s_binary->dbi_handler->dump->code = NULL;
+    s_binary->dbi_handler->dump->jmp = 0x0;
+
+    s_binary->dbi_handler->restore = calloc(1, sizeof(hook_t));
+    s_binary->dbi_handler->restore->orig_bytes = calloc(1, 64);
+    s_binary->dbi_handler->restore->length = 0x0;
+    s_binary->dbi_handler->restore->code = NULL;
+    s_binary->dbi_handler->restore->jmp = 0x0;
+
     s_binary->dispatcher = 0x0;
     s_binary->dbi_handler->u_handler = NULL;
-    s_binary->dbi_handler->curr_hook = 0x0;
-    s_binary->dbi_handler->length_trampoline = 0;
-    s_binary->dbi_handler->trampoline = NULL;
-
-    s_binary->dbi_handler->state = malloc(sizeof(state_rtime_t));
-    s_binary->dbi_handler->orig_bytes = calloc(1, 64); // arbitrary length
+    s_binary->dbi_handler->curr_hook = NULL;
+    s_binary->dbi_handler->state->null_entry = 0x0; // useless
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -190,14 +199,29 @@ int end_analysis(mdata_binary_t *s_binary) {
         free(s_binary->dbi_handler->state);
     }
 
-    if (s_binary->dbi_handler->orig_bytes) {
-        free(s_binary->dbi_handler->orig_bytes);
+    if (s_binary->dbi_handler->dump->code) {
+        free(s_binary->dbi_handler->dump->code);
     }
 
-    if (s_binary->dbi_handler->trampoline) {
-        free(s_binary->dbi_handler->trampoline);
+    if (s_binary->dbi_handler->restore->code) {
+        free(s_binary->dbi_handler->restore->code);
     }
 
+    if (-1 == munmap(s_binary->dbi_handler->restore_stub, LENGTH_STUB)) {
+        return -1;
+    }
+
+    if (-1 == munmap(s_binary->dbi_handler->dump_stub, LENGTH_STUB)) {
+        return -1;
+    }
+
+    if (-1 == munmap(s_binary->dbi_handler->host_rsp, 0x10000)) {
+        return -1;
+    }
+
+    free(s_binary->dbi_handler->dump);
+    free(s_binary->dbi_handler->restore);
+    free(s_binary->dbi_handler->curr_hook);
     free(s_binary->dbi_handler->hashmap);
     free(s_binary->dbi_handler);
     free(s_binary->fbinary);

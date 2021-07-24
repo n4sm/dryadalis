@@ -10,8 +10,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 
-#include "../include/core_mapper.h"
-#include "../include/kernel_list.h"
+#include "../include/dryadalis_x86.h"
 
 /* Dieu et le Roy */
 
@@ -408,6 +407,8 @@ void exec_binary(mdata_binary_t* s_binary, char **argv, int argc) {
         "xor %%r14, %%r14\n"
         "xor %%r15, %%r15\n"
         "xor %%rbp, %%rbp\n"
-        "jmp *%%rax\n" // shitty at&t
+        "push %%rax\n"
+        "xor %%rax, %%rax\n"
+        "ret\n"
         :: "r"(entry), "r"(stack) :);
 }
