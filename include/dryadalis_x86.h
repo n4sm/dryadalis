@@ -1,0 +1,213 @@
+#ifndef DRYADALIS_H_
+#define DRYADALIS_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <libelf.h>
+#include <elf.h>
+#include <stdbool.h>
+#include <sys/mman.h>
+#include <stdbool.h>
+
+#include "kernel_list.h"
+
+// define
+
+#define OPT_BBL 0x0
+#define OPT_SINGLE_STEP 0x1
+#define OPT_CFLOW 0x2
+
+#define LENGTH_STUB 0x1000
+#define PAGE_SZ 0x1000
+#define ELF_MIN_ALIGN PAGE_SZ
+
+#define STUB_ADDR_DUMP 0xff1d000
+#define STUB_ADDR_RESTORE 0xdf1d000
+
+// structures
+
+typedef int (*u_callback_t) (void* s_binary);
+
+typedef struct hashmap_s {
+    unsigned long** value;
+} hashmap_t;
+
+typedef struct state_rtime_s {
+    unsigned long rax;
+    unsigned long rbx;
+    unsigned long rcx;
+    unsigned long rdx;
+    unsigned long rsi;
+    unsigned long rdi;
+    unsigned long rbp;
+    // ==
+    unsigned long rsp;
+    unsigned long rip;
+    unsigned long rflags;
+    unsigned long cs;
+    unsigned long ss;
+    unsigned long gs;
+    unsigned long es;
+    unsigned long ds;
+    unsigned long fs;
+    // ==
+    unsigned long r8;
+    unsigned long r9;
+    unsigned long r10;
+    unsigned long r11;
+    unsigned long r12;
+    unsigned long r13;
+    unsigned long r14;
+    unsigned long r15;
+
+    unsigned long null_entry;
+} state_rtime_t;
+
+typedef struct arg_s {
+    int argc;
+    char** argv;
+} arg_t;
+
+typedef struct hook_s {
+    unsigned char* code;
+    unsigned char* orig_bytes;
+    ssize_t length;
+    unsigned long jmp;
+} hook_t;
+
+typedef struct dbi_instr_s {
+    _Bool take_callback;
+    state_rtime_t* state;
+    u_callback_t u_handler;
+    hook_t* dump;
+    hook_t* restore;
+    // unsigned char* orig_bytes;
+    // ssize_t length_trampoline;
+    // unsigned char* trampoline;
+    // ssize_t length_trampoline_restore;
+    // unsigned long jmp_restore;
+    // unsigned char* orig_bytes_restore;
+    // unsigned char* trampoline_restore;
+    unsigned char* dump_stub;
+    unsigned char* restore_stub;
+    unsigned long* curr_hook;
+    unsigned long *host_rsp;
+    hashmap_t* hashmap;
+} dbi_instr_t;
+
+typedef struct mem_map_s {
+    struct list_head list;
+    unsigned long addr;
+    ssize_t size;
+    int prot;
+} mem_map_t;
+
+typedef struct mdata_binary_s {
+    unsigned char *fbinary; // malloc pointer to the binary
+    unsigned long len_file;
+    const char *filename;
+    int fd; // fd of the binary
+    Elf64_Phdr** s_ph; // list of pointer to the program header
+    Elf64_Ehdr* eh;
+    _Bool pie; // is pie ?
+    struct mdata_binary_s *interp; // pointer to the real interp mapped
+    unsigned char *base; // real base address of the manual mapped binary
+    mem_map_t* memory_map;
+    unsigned long dispatcher;
+    dbi_instr_t* dbi_handler;
+} mdata_binary_t;
+
+// macro
+
+#define IS_INTERP(x) x->p_type == PT_INTERP
+#define IS_LOAD(x) x->p_type == PT_LOAD
+#define IS_DYNAMIC(x) x->p_type == PT_DYNAMIC
+
+#define PAGE_ALIGN(x) (x & ~0xfff)
+#define PAGE_ROUND(x) (PAGE_ALIGN(x)) + 0xfff
+#define PAGE_OFFT(x) (x & 0xfff)
+#define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1)) - 1
+// https://elixir.bootlin.com/linux/v4.8/source/fs/binfmt_elf.c#L82
+
+#define _PROT_WRITE(x) (x & PF_W ? PROT_WRITE : false)
+#define _PROT_EXEC(x) (x & PF_X ? PROT_EXEC : false)
+
+#define group_make_link(hashmap, group_reg, reg) \
+            for (int i = 0; i < (sizeof(group_reg) / sizeof(group_reg[0])); i++) { \
+                make_link(hashmap, group_reg[i], reg);\
+            }
+
+#define make_link(hashmap, code_reg, reg) \
+            hashmap->value[code_reg] = &(reg)
+
+// elf parsing
+
+_Bool is_elf(unsigned char *eh_ptr);
+uint64_t search_base_addr(Elf64_Phdr *buffer_mdata_phdr[], Elf64_Ehdr *eh_ptr);
+Elf64_Phdr *search_pt_dyn(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr);
+int parse_phdr(Elf64_Ehdr *ptr, Elf64_Phdr *buffer_mdata_ph[]);
+int parse_shdr(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[]);
+char **parse_sh_name(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[], char **sh_name_buffer);
+int init_struct(Elf64_Shdr *buffer_mdata_sh[], Elf64_Phdr *buffer_mdata_ph[], char **sh_name, Elf64_Ehdr *ptr);
+mdata_binary_t *init_analysis(const char *s);
+int end_analysis(mdata_binary_t *s_binary);
+mdata_binary_t* alloc_binary();
+int free_binary(mdata_binary_t *bi);
+int add_auxvt(unsigned long id, unsigned long* origin, unsigned long *base_auxvt, unsigned long val);
+
+// core_mapper
+
+mdata_binary_t *map_binary(const char *filename);
+mdata_binary_t *load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
+int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
+void exec_binary(mdata_binary_t* s_binary, char **argv, int argc);
+int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size);
+int free_memory_map(mem_map_t* memory_map);
+int log_map(mem_map_t* memory_map);
+mem_map_t* merge_address_space(mdata_binary_t* s_binary);
+_Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary);
+_Bool is_rx(unsigned long addr, mdata_binary_t* s_binary);
+_Bool is_ro(unsigned long addr, mdata_binary_t* s_binary);
+_Bool is_rw(unsigned long addr, mdata_binary_t* s_binary);
+_Bool is_rwx(unsigned long addr, mdata_binary_t* s_binary);
+
+// returns the prot according to the address
+int prot(unsigned long addr, mdata_binary_t* s_binary);
+unsigned long* map_stack();
+
+// engine
+
+// returns how many byte there is up to the first cflow instruction
+int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary);
+// encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
+int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
+// returns the newly mmapped shellcode that dumps the state of the guest into the state struct
+unsigned long craft_hook(mdata_binary_t* s_binary);
+int restore_hook(unsigned char* patch, mdata_binary_t* s_binary);
+
+int instrument(mdata_binary_t* s_binary, u_callback_t callback, arg_t* arguments);
+unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook);
+
+unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary);
+void _dispatcher(mdata_binary_t* s_binary);
+
+void alloc_state(mdata_binary_t* s_binary);
+void continue_exec(mdata_binary_t* s_binary);
+int restore_bytes(hook_t* hook, int prot);
+int write_hook(mdata_binary_t* s_binary, hook_t* hook);
+
+// state_runt
+
+hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary);
+int free_hashmap(hashmap_t* hashmap);
+void update_reg(int key, hashmap_t* hashmap, unsigned long value);
+
+_Bool is_8bits_right(int reg);
+_Bool is_8bits_left(int reg);
+_Bool is_16bits(int reg);
+_Bool is_32bits(int reg);
+_Bool is_64bits(int reg);
+unsigned long read_reg(int key, hashmap_t* hashmap);
+
+#endif
