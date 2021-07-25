@@ -317,7 +317,7 @@ _Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (PAGE_ALIGN(addr) == curr->addr) {
+        if (curr->addr <= addr && (curr->addr + curr->size) > addr) {
             return true;
         }
     }
@@ -359,11 +359,18 @@ int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t
     curr->prot = prot;
     curr->addr = PAGE_ALIGN(addr);
     curr->size = size;
+    mem_map_t* iter = NULL;
 
     if (!s_binary->memory_map) {
         INIT_LIST_HEAD(&(curr->list));
     } else {
-        list_add(&(curr->list), &(s_binary->memory_map->list));
+        list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
+            if (iter->addr + curr->size) {
+                /* code */
+            }
+            
+        }
+        //list_add(&(curr->list), &(memory_map->list));
     }
 
     s_binary->memory_map = curr;
