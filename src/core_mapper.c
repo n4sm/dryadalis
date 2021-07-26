@@ -66,9 +66,9 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         if (MAP_FAILED == mmap((void *)PAGE_ALIGN(curr_map), PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))), PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset))) {
             return -1;
         }
-        list_add_map(s_binary, 
+        list_add_map(s_binary,
                 PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
-                curr_map,
+                PAGE_ALIGN(curr_map),
                 sz);
     }
 
@@ -95,7 +95,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
                 return -1;
             }
             fprintf(stdout, "[*] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end)));
-            list_add_map(s_binary, 
+            list_add_map(s_binary,
                     PROT_READ | PROT_WRITE,
                     map_end+1,
                     PAGE_ROUND((bss_end - map_end))); 
@@ -217,7 +217,7 @@ mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (PAGE_ALIGN(addr) == curr->addr) {
+        if (curr->addr <= PAGE_ALIGN(addr) && addr <= (curr->addr + curr->size)) {
             return curr;
         }
     }
@@ -329,12 +329,18 @@ _Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary) {
 
 // merge the address space of the target binary and its linker.
 mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
+    mem_map_t* iter = NULL;
+
     if (s_binary->interp) {
         struct list_head* tmp = malloc(sizeof(struct list_head));
         tmp->next = s_binary->interp->memory_map->list.next;
         tmp->prev = &(s_binary->interp->memory_map->list);
 
         list_splice(tmp, &(s_binary->memory_map->list));
+    }
+
+    list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
+        merge_pages(s_binary, iter->prot, iter->addr, iter->size);
     }
 
     return s_binary->memory_map;
@@ -357,24 +363,37 @@ int free_memory_map(mem_map_t* memory_map) {
 int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size) {
     mem_map_t* curr = malloc(sizeof(mem_map_t));
     curr->prot = prot;
-    curr->addr = PAGE_ALIGN(addr);
+    curr->addr = addr;
     curr->size = size;
     mem_map_t* iter = NULL;
 
     if (!s_binary->memory_map) {
         INIT_LIST_HEAD(&(curr->list));
     } else {
-        list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
-            if (iter->addr + curr->size) {
-                /* code */
-            }
-            
-        }
-        //list_add(&(curr->list), &(memory_map->list));
+        // list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
+        //     if ((iter->addr + curr->size + 1) == addr && prot == iter->prot) {
+        //         iter->size += size;
+        //         return 0;
+        //     }
+        // }
+
+        list_add(&(curr->list), &(s_binary->memory_map->list));
     }
 
     s_binary->memory_map = curr;
     return 0;
+}
+
+int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size) {
+    mem_map_t* iter = NULL;
+
+    list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
+        if ((iter->addr + iter->size + 1) == addr && prot == iter->prot) {
+            iter->size += size;
+            return 0;
+        }
+    }
+    return -1;
 }
 
 // Prints some mappings
@@ -382,10 +401,10 @@ int log_map(mem_map_t* memory_map) {
     mem_map_t* curr = NULL;
 
     list_for_each_entry(curr, &(memory_map->list), list) {
-        fprintf(stdout, "[+] %lx %lx / %lx\n", curr->addr, curr->addr + curr->size, curr->size);
+        fprintf(stdout, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size, curr->size, curr->prot);
     }
 
-    fprintf(stdout, "[+] %lx %lx / %lx\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size);
+    fprintf(stdout, "[+] %lx %lx / %lx # %x\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size, curr->prot);
 
     return 0;
 }

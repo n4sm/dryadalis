@@ -28,56 +28,110 @@ _Bool is_ret(cs_insn *insn) {
     return (insn->id & (X86_GRP_RET));
 }
 
+_Bool is_endbr64(unsigned char* s) {
+    return !memcmp(s, "\xf3\x0f\x1e\xfa", 4);
+}
+
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
 int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
     int n = 0;
     csh handle;
-	cs_insn *insn;
+	
 	size_t count;
+    unsigned long offt_end = 0x0;
     unsigned long page_offt = PAGE_OFFT(addr);
     unsigned long size;
+    mem_map_t* memory_desc = mem_desc(addr, s_binary);
 
     if (!is_mapped(addr, s_binary)) {
+        fprintf(stderr, "0x%lx not mapped\n", addr);
         return -1;
     }
 
     // We can handle cases where the instruction is overlapping between two pages
-    if (is_mapped(PAGE_ALIGN(addr) + 0x1000, s_binary)) {
-        size = PAGE_OFFT(~page_offt) + 0x1000;
-    } else {
-        size = PAGE_OFFT(~page_offt);
-    }
+    // if (is_mapped(PAGE_ALIGN(addr) + 0x1000, s_binary)) {
+    //     size = PAGE_OFFT(~page_offt) + 0x1000;
+    // } else {
+    //     size = PAGE_OFFT(~page_offt);
+    // }
 
+    size = memory_desc->size - page_offt;
+    ssize_t saved_sz = size;
+    fprintf(stdout, "sz: %lx\n", size);
+    fprintf(stdout, "sz: %lx\n", size);
     unsigned char* insn_buf = calloc(1, size);
 
-    memcpy(insn_buf, (void* )addr, size);
+    void* saved = memcpy(insn_buf, (void* )addr, size);
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
+        fprintf(stderr, "FATAL capstone\n", addr);
         return -1;
     }
+    cs_insn *insn = cs_malloc(handle);
 
-    count = cs_disasm(handle, insn_buf, size, s_binary->dbi_handler->state->rip ? s_binary->dbi_handler->state->rip : s_binary->interp->eh->e_entry + s_binary->interp->base, 0, &insn);
+    ssize_t curr_sz = 0;
+    unsigned long curr_addr = addr;
 
-    for (int i = 0 ; i < count ; i++ ) {
-        fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn[i].address, insn[i].mnemonic,
-					insn[i].op_str);
-    }
-
-    for (int i = 0 ; i < count ; i++ ) {
-        n += insn[i].size;
-        if (is_cflow(&(insn[i]))) {
-            free(insn_buf);
-            cs_free(insn, count);
-            return n;
+    if (size > 4) {
+        if (is_endbr64(insn_buf)) {
+            fprintf(stdout, "0x%lx:\t%s\n", addr, "endbr64");
+            insn_buf += 4;
+            size -= 4;
         }
     }
 
-    if (is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
-        free(insn_buf);
-        cs_free(insn, count);
-        return opcodes_cflow(addr + n, s_binary);
+    while(cs_disasm_iter(handle, &insn_buf, &size, &curr_addr, insn)) {
+        // analyze disassembled instruction in @insn variable ...
+        // NOTE: @code, @code_size & @address variables are all updated
+        // to point to the next instruction after each iteration.
+        if (size > 4) {
+            if (is_endbr64(insn_buf)) {
+                fprintf(stdout, "0x%lx: %s\n", addr, "endbr64");
+                insn_buf += 4;
+                size -= 4;
+                continue;
+            }
+        }
+
+        fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn->address, insn->mnemonic,
+					insn->op_str);
+        if (is_cflow(insn)) {
+            free(saved);
+            cs_free(insn, 1);
+            return saved_sz - size;
+        }
     }
 
+    // count = cs_disasm(handle, insn_buf, size, s_binary->dbi_handler->state->rip ? s_binary->dbi_handler->state->rip : s_binary->interp->eh->e_entry + s_binary->interp->base, 0, &insn);
+
+    // if (!count) {
+    //     fprintf(stderr, "FATAL count\n", addr);
+    //     return -1;
+    // }
+
+    // for (int i = 0 ; i < count ; i++ ) {
+    //     fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn[i].address, insn[i].mnemonic,
+	// 				insn[i].op_str);
+    // }
+
+    // for (int i = 0 ; i < count ; i++ ) {
+    //     n += insn[i].size;
+    //     if (is_cflow(&(insn[i]))) {
+    //         free(insn_buf);
+    //         cs_free(insn, 1);
+    //         return n;
+    //     }
+    // }
+
+    // if (is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
+    //     free(insn_buf);
+    //     cs_free(insn, count);
+    //     return opcodes_cflow(addr + n, s_binary);
+    // }
+
+    free(insn_buf);
+    cs_free(insn, 1);
+    fprintf(stderr, "FATAL found nothing\n", addr);
     return -1;
 }
 
@@ -347,7 +401,7 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
 int instrument(mdata_binary_t* s_binary, u_callback_t callback, arg_t* arguments) {
     unsigned long entry = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base);
     s_binary->dbi_handler->curr_hook = calloc(1, sizeof(unsigned long));
-    s_binary->dbi_handler->host_rsp = (unsigned long)map_stack() + 8;
+    s_binary->dbi_handler->host_rsp = (unsigned long)(map_stack() + 0x2000) + 8;
     s_binary->dispatcher = _dispatcher;
 
     if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
@@ -405,6 +459,7 @@ unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
     off_t off_cflow = opcodes_cflow(hook->jmp, s_binary);
 
     if (-1 == off_cflow) {
+        fprintf(stderr, "FATAL opcodes_cflow\n");
         return -1;
     }
 
@@ -510,7 +565,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
             target = read_reg(operand->reg, s_binary->dbi_handler->hashmap);
             break;
         case X86_OP_IMM:
-            target = (unsigned long)(sign_extend(operand->imm, operand->size) + s_binary->dbi_handler->state->rip);
+            target = (unsigned long)(operand->imm + s_binary->dbi_handler->state->rip);
             break;
         case X86_OP_MEM:
             // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0

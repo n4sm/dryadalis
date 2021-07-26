@@ -166,6 +166,7 @@ int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t
 int free_memory_map(mem_map_t* memory_map);
 int log_map(mem_map_t* memory_map);
 mem_map_t* merge_address_space(mdata_binary_t* s_binary);
+mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary);
 _Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary);
 _Bool is_rx(unsigned long addr, mdata_binary_t* s_binary);
 _Bool is_ro(unsigned long addr, mdata_binary_t* s_binary);
