@@ -25,6 +25,9 @@
 #define STUB_ADDR_DUMP 0xff1d000
 #define STUB_ADDR_RESTORE 0xdf1d000
 
+#define INSTRUMENTED_FS 0x14f000
+#define INSTRUMENTED_GS 0x15f000
+
 // structures
 
 typedef int (*u_callback_t) (void* s_binary);
@@ -79,6 +82,7 @@ typedef struct hook_s {
 typedef struct dbi_instr_s {
     _Bool take_callback;
     state_rtime_t* state;
+    state_rtime_t* host_state;
     u_callback_t u_handler;
     hook_t* dump;
     hook_t* restore;
@@ -197,6 +201,10 @@ void alloc_state(mdata_binary_t* s_binary);
 void continue_exec(mdata_binary_t* s_binary);
 int restore_bytes(hook_t* hook, int prot);
 int write_hook(mdata_binary_t* s_binary, hook_t* hook);
+int host_save_state(state_rtime_t* state);
+
+static int arch_prctl(int func, void *ptr);
+int set_fs_gs(void* fs, void* gs);
 
 // state_runt
 

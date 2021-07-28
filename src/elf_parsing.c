@@ -149,6 +149,7 @@ mdata_binary_t* init_analysis(const char *s) {
 
     s_binary->dbi_handler = calloc(1, sizeof(dbi_instr_t));
     s_binary->dbi_handler->state = calloc(1, sizeof(state_rtime_t));
+    s_binary->dbi_handler->host_state = calloc(1, sizeof(state_rtime_t));
     s_binary->dbi_handler->hashmap = calloc(1, sizeof(hashmap_t));
     s_binary->dbi_handler->hashmap = init_hashmap(s_binary->dbi_handler->hashmap, s_binary);
 
@@ -219,6 +220,7 @@ int end_analysis(mdata_binary_t *s_binary) {
         return -1;
     }
 
+    free(s_binary->dbi_handler->host_state);
     free(s_binary->dbi_handler->dump);
     free(s_binary->dbi_handler->restore);
     free(s_binary->dbi_handler->curr_hook);

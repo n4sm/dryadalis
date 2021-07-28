@@ -207,7 +207,7 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
     add_auxvt(AT_NULL, &iter[idx], &stack[idx], 0x0);
 
-    fprintf(stdout, "[*] vsdo @ %lx\n", auxvt(&iter[idx], AT_SYSINFO_EHDR));
+    //fprintf(stdout, "[*] vsdo @ %lx\n", auxvt(&iter[idx], AT_SYSINFO_EHDR));
     return stack;
 }
 

@@ -12,7 +12,8 @@
 #include "../include/dryadalis_x86.h"
 
 int test(void* s_binary) {
-    fprintf(stderr, "rip: %lx\n", ((mdata_binary_t* )s_binary)->dbi_handler->state->rip);
+    unsigned long rip = ((mdata_binary_t* )s_binary)->dbi_handler->state->rip;
+    // fprintf(stdout, "rip: %lx\n", rip);
 }
 
 int main(int argc, char **argv) {

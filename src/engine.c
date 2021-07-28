@@ -9,6 +9,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <asm/ldt.h>   
+#include <asm/prctl.h>
+#include <sys/prctl.h>
 
 #include <capstone/capstone.h>
 #include <capstone/x86.h>
@@ -19,13 +24,43 @@
 
 // =-=-=-=-=--
 
-// check if an instruction will change the control flow
-_Bool is_cflow(cs_insn *insn) {
-    return (insn->id & (X86_GRP_CALL | X86_GRP_INT | X86_GRP_JUMP | X86_GRP_RET)) != 0;
+static int arch_prctl(int func, void *ptr) {
+    return syscall(__NR_arch_prctl, func, ptr);
 }
 
-_Bool is_ret(cs_insn *insn) {
-    return (insn->id & (X86_GRP_RET));
+int set_fs_gs(void* fs, void* gs) {
+    if (-1 == arch_prctl(ARCH_SET_FS, fs) || -1 == arch_prctl(ARCH_SET_GS, gs)) {
+        return -1;
+    }
+    return 0;
+}
+
+int save_fs_gs(unsigned long* fs, unsigned long* gs) {
+    if (-1 == arch_prctl(ARCH_GET_FS, fs) || -1 == arch_prctl(ARCH_GET_GS, gs)) {
+        return -1;
+    }
+    return 0;
+}
+
+// =-=-=-=-=--
+
+// check if an instruction will change the control flow
+_Bool is_cflow(int group) {
+    if ((group == X86_GRP_CALL)) {
+        return true;
+    } else if (group == X86_GRP_INT) {
+        return true;
+    } else if (group == X86_GRP_JUMP) {
+        return true;
+    } else if (group == X86_GRP_RET) {
+        return true;
+    }
+
+    return false;
+}
+
+_Bool is_ret(int group) {
+    return (group == X86_GRP_RET);
 }
 
 _Bool is_endbr64(unsigned char* s) {
@@ -36,8 +71,7 @@ _Bool is_endbr64(unsigned char* s) {
 int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
     int n = 0;
     csh handle;
-	
-	size_t count;
+
     unsigned long offt_end = 0x0;
     unsigned long page_offt = PAGE_OFFT(addr);
     unsigned long size;
@@ -56,78 +90,52 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
     // }
 
     size = memory_desc->size - page_offt;
-    ssize_t saved_sz = size;
-    fprintf(stdout, "sz: %lx\n", size);
-    fprintf(stdout, "sz: %lx\n", size);
     unsigned char* insn_buf = calloc(1, size);
 
-    void* saved = memcpy(insn_buf, (void* )addr, size);
+    memcpy(insn_buf, (void* )addr, size);
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
         fprintf(stderr, "FATAL capstone\n", addr);
         return -1;
     }
+    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
     cs_insn *insn = cs_malloc(handle);
-
-    ssize_t curr_sz = 0;
-    unsigned long curr_addr = addr;
 
     if (size > 4) {
         if (is_endbr64(insn_buf)) {
             fprintf(stdout, "0x%lx:\t%s\n", addr, "endbr64");
             insn_buf += 4;
             size -= 4;
+            n += 4;
+            addr += 4;
         }
     }
 
-    while(cs_disasm_iter(handle, &insn_buf, &size, &curr_addr, insn)) {
+    while(cs_disasm_iter(handle, &insn_buf, &size, &addr, insn)) {
         // analyze disassembled instruction in @insn variable ...
         // NOTE: @code, @code_size & @address variables are all updated
         // to point to the next instruction after each iteration.
         if (size > 4) {
             if (is_endbr64(insn_buf)) {
-                fprintf(stdout, "0x%lx: %s\n", addr, "endbr64");
+                fprintf(stdout, "0x%lx:\t%s\n", addr, "endbr64");
                 insn_buf += 4;
                 size -= 4;
+                n += 4;
+                addr += 4;
                 continue;
             }
         }
-
-        fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn->address, insn->mnemonic,
-					insn->op_str);
-        if (is_cflow(insn)) {
-            free(saved);
-            cs_free(insn, 1);
-            return saved_sz - size;
+        
+        fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn->address, insn->mnemonic, insn->op_str);
+        for (size_t i = 0; i < insn->detail->groups_count; i++) {
+            if (is_cflow(insn->detail->groups[i])) {
+                cs_free(insn, 1);
+                return n;
+            }
         }
+
+        n += insn->size;
     }
-
-    // count = cs_disasm(handle, insn_buf, size, s_binary->dbi_handler->state->rip ? s_binary->dbi_handler->state->rip : s_binary->interp->eh->e_entry + s_binary->interp->base, 0, &insn);
-
-    // if (!count) {
-    //     fprintf(stderr, "FATAL count\n", addr);
-    //     return -1;
-    // }
-
-    // for (int i = 0 ; i < count ; i++ ) {
-    //     fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn[i].address, insn[i].mnemonic,
-	// 				insn[i].op_str);
-    // }
-
-    // for (int i = 0 ; i < count ; i++ ) {
-    //     n += insn[i].size;
-    //     if (is_cflow(&(insn[i]))) {
-    //         free(insn_buf);
-    //         cs_free(insn, 1);
-    //         return n;
-    //     }
-    // }
-
-    // if (is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
-    //     free(insn_buf);
-    //     cs_free(insn, count);
-    //     return opcodes_cflow(addr + n, s_binary);
-    // }
 
     free(insn_buf);
     cs_free(insn, 1);
@@ -287,8 +295,8 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                              mov rdi, 0x%lx; \
                              mov rax, 0x%lx; \
                              push rax;\
-                             mov rax, [%p];\
-                             mov [%p], rax;\
+                             movabs rax, [%p];\
+                             movabs [%p], rax;\
                              ret", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
                                                            &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
                                                            &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rbp), \
@@ -313,7 +321,6 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
     }
 
     memcpy(STUB_ADDR_DUMP, encode, size);
-
     return STUB_ADDR_DUMP;
 }
 
@@ -332,51 +339,51 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
     s_binary->dbi_handler->restore_stub = STUB_ADDR_RESTORE;
 
     sprintf(insns, "         movabs rax, [%p]; \
-                             mov rbx, rax;   \
-                             movabs rax, [%p]; \
-                             mov rcx, rax; \
-                             movabs rax, [%p]; \
-                             mov rdx, rax; \
-                             movabs rax, [%p]; \
-                             mov rdi, rax; \
-                             movabs rax, [%p]; \
-                             mov rsi, rax; \
-                             movabs rax, [%p]; \
-                             mov rbp, rax; \
+                                mov rbx, rax;   \
+                                movabs rax, [%p]; \
+                                mov rcx, rax; \
+                                movabs rax, [%p]; \
+                                mov rdx, rax; \
+                                movabs rax, [%p]; \
+                                mov rdi, rax; \
+                                movabs rax, [%p]; \
+                                mov rsi, rax; \
+                                movabs rax, [%p]; \
+                                mov rbp, rax; \
                 movabs rax, [%p]; mov es, rax; \
                 movabs rax, [%p]; mov gs, rax; \
                 movabs rax, [%p]; mov fs, rax; \
                 movabs rax, [%p]; mov ss, rax; \
                 movabs rax, [%p]; mov ds, rax; \
-                             movabs rax, [%p]; \
-                             mov r8, rax; \
-                             movabs rax, [%p]; \
-                             mov r9, rax; \
-                             movabs rax, [%p]; \
-                             mov r10, rax; \
-                             movabs rax, [%p]; \
-                             mov r11, rax; \
-                             movabs rax, [%p]; \
-                             mov r12, rax; \
-                             movabs rax, [%p]; \
-                             mov r13, rax; \
-                             movabs rax, [%p]; \
-                             mov r14, rax; \
-                             movabs rax, [%p]; \
-                             mov r15, rax; \
+                                movabs rax, [%p]; \
+                                mov r8, rax; \
+                                movabs rax, [%p]; \
+                                mov r9, rax; \
+                                movabs rax, [%p]; \
+                                mov r10, rax; \
+                                movabs rax, [%p]; \
+                                mov r11, rax; \
+                                movabs rax, [%p]; \
+                                mov r12, rax; \
+                                movabs rax, [%p]; \
+                                mov r13, rax; \
+                                movabs rax, [%p]; \
+                                mov r14, rax; \
+                                movabs rax, [%p]; \
+                                mov r15, rax; \
                     movabs rax, [%p]; push rax; \
                     movabs rax, [%p]; push rax; \
-                             movabs rax, [%p]; \
-                             popfq; \
-                             pop rsp; \
-                             jmp rax", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
-                                                           &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
-                                                           &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), &(s_binary->dbi_handler->state->fs), \
-                                                           &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
-                                                           &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
-                                                           &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
-                                                           &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15), &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
-                                                           &(s_binary->dbi_handler->restore->jmp));
+                                movabs rax, [%p]; \
+                                popfq; \
+                                pop rsp; \
+                                jmp rax", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
+                                                            &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
+                                                            &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), &(s_binary->dbi_handler->state->fs), \
+                                                            &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
+                                                            &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
+                                                            &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
+                                                            &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15), &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
+                                                            &(s_binary->dbi_handler->restore->jmp));
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -393,6 +400,37 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
 
     memcpy(STUB_ADDR_RESTORE, encode, size);
     return (unsigned long)STUB_ADDR_RESTORE;
+}
+
+int host_save_state(state_rtime_t* state) {
+    __asm__ __volatile__ (
+        "mov %%fs, %0\n"
+        "mov %%cs, %1\n"
+        "mov %%gs, %2\n"
+        "mov %%ds, %3\n"
+        "mov %%ss, %4\n"
+        // "mov %%rax, %5\n"
+        // "mov %%rbx, %6\n"
+        // "mov %%rcx, %7\n"
+        // "mov %%rdx, %8\n"
+        // "mov %%rsi, %9\n"
+        // "mov %%rdi, %10\n"
+        // "mov %%rbp, %11\n"
+        // "mov %%rsp, %12\n"
+        // "mov %%r8, %13\n"
+        // "mov %%r9, %14\n"
+        // "mov %%r10, %15\n"
+        // "mov %%r11, %16\n"
+        // "mov %%r12, %17\n"
+        // "mov %%r13, %18\n"
+        // "mov %%r14, %19\n"
+        // "mov %%r15, %20\n"
+        // :   , "=m"(state->rax), "=m"(state->rbx),
+        //     "=m"(state->rcx), "=m"(state->rdx), "=m"(state->rsi), "=m"(state->rdi), "=m"(state->rbp), "=m"(state->rsp), "=m"(state->r8),
+        //     "=m"(state->r9), "=m"(state->r10), "=m"(state->r11), "=m"(state->r12), "=m"(state->r13), "=m"(state->r14), "=m"(state->r15)
+        :"=m"(state->fs), "=m"(state->cs), "=m"(state->gs), "=m"(state->ds), "=m"(state->ss): :);
+
+    return 0;
 }
 
 // =-=-=-=-=--
@@ -436,7 +474,15 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback, arg_t* arguments
                                                       s_binary->dbi_handler->dump); // which is rewritten by the hook
 
     s_binary->dbi_handler->take_callback = true;
+
+    //host_save_state(s_binary->dbi_handler->host_state);
+    if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {
+        exit(-1);
+    } else if (-1 == set_fs_gs((void* )INSTRUMENTED_FS, (void* )INSTRUMENTED_GS)) {
+        exit(-1);
+    }
     exec_binary(s_binary, arguments->argv, arguments->argc);
+    // no return
     return 0;
 }
 
@@ -445,6 +491,12 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
     if (mprotect(PAGE_ALIGN((hook->jmp)), PAGE_SZ, prot(hook->jmp, s_binary) | PROT_WRITE)) {
         return -1;
     }
+    
+    // for (size_t i = 0; i < hook->length; i++) {
+    //     fprintf(stdout, "%x", hook->orig_bytes[i]);
+    // }
+
+    // printf("\n");
     
     memcpy((void* )(hook->jmp), hook->code, hook->length);
     if (mprotect(PAGE_ALIGN((hook->jmp)), PAGE_SZ, prot(hook->jmp, s_binary))) {
@@ -491,6 +543,11 @@ int restore_bytes(hook_t* hook, int prot) {
 }
 
 void _dispatcher(mdata_binary_t* s_binary) {
+    if (-1 == set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
+        fprintf(stderr, "FATAL arch_prctl\n");
+        exit(-1);
+    }
+
     if (s_binary->dbi_handler->take_callback) {
         s_binary->dbi_handler->u_handler(s_binary);
     }
@@ -512,7 +569,7 @@ void _dispatcher(mdata_binary_t* s_binary) {
         exit(-1);
     }
 
-    fprintf(stdout, "target found: 0x%lx\n", target);
+    fprintf(stdout, "cflow target: 0x%lx\n", target);
     s_binary->dbi_handler->dump->jmp = target;
     if (-1 == _instrument(s_binary, s_binary->dbi_handler->dump)) {
         fprintf(stderr, "FATAL _instrument # dump hook\n");
@@ -526,11 +583,12 @@ void _dispatcher(mdata_binary_t* s_binary) {
     }
 
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
+    //host_save_state(s_binary->dbi_handler->host_state);
     continue_exec(s_binary);
 }
 
 long sign_extend(size_t size, unsigned long value) {
-    return (long) ((value & (1 << (size-1))) ^ value) ^ ((value & (1 << (size-1))) << (64-size));
+    return (long) ((value & (1 << (size-1)) | ((value << 1) >> 1)));
 }
 
 unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) {
@@ -546,42 +604,42 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
     }
 
     memcpy(buf_insn, instruction, 15);
-
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
         return -1;
     }
 
     cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    count = cs_disasm(handle, buf_insn, size, 0, 1, &insn);
+    count = cs_disasm(handle, buf_insn, 15, 0, 1, &insn);
 
     cs_detail* details = insn->detail;
     cs_x86* x86 = &(details->x86);
 
     if (x86->op_count) {
         cs_x86_op* operand = &(x86->operands[0]);
-        switch (operand->type)
-        {
-        case X86_OP_REG:
-            target = read_reg(operand->reg, s_binary->dbi_handler->hashmap);
-            break;
-        case X86_OP_IMM:
-            target = (unsigned long)(operand->imm + s_binary->dbi_handler->state->rip);
-            break;
-        case X86_OP_MEM:
-            // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
-            target = *((unsigned long *)(read_reg(operand->mem.base, s_binary->dbi_handler->hashmap)
-                   + read_reg(operand->mem.index, s_binary->dbi_handler->hashmap)
-                   * operand->mem.scale
-                   + operand->mem.disp));
-            break;
-        default:
-            target = -1;
-            break;
+        switch (operand->type) {
+            case X86_OP_REG:
+                target = read_reg(operand->reg, s_binary->dbi_handler->hashmap);
+                break;
+            case X86_OP_IMM:
+                target = (unsigned long)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
+                break;
+            case X86_OP_MEM:
+                // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
+                target = *((unsigned long *)(read_reg(operand->mem.base, s_binary->dbi_handler->hashmap)
+                    + read_reg(operand->mem.index, s_binary->dbi_handler->hashmap)
+                    * operand->mem.scale
+                    + operand->mem.disp));
+                break;
+            default:
+                target = -1;
+                break;
         }
     }
 
-    if (is_ret(insn)) {
-        target = *((unsigned long* )read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap));
+    for (size_t i = 0; i < details->groups_count; i++) {
+        if (is_ret(details->groups[i])) {
+            target = *((unsigned long* )read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap));
+        }
     }
 
     cs_free(insn, count);
@@ -591,6 +649,10 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 // =-=-=-=-
 
 void continue_exec(mdata_binary_t* s_binary) {
+    if (-1 == set_fs_gs(INSTRUMENTED_FS, INSTRUMENTED_GS)) {
+        fprintf(stderr, "FATAL arch_prctl\n");
+    }
+
     __asm__ __volatile__ (
         "mov %0, %%rax\n"
         "jmp *%%rax\n" // shitty at&t
