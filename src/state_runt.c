@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <assert.h> 
 
 #include <capstone/capstone.h>
 #include <capstone/x86.h>
@@ -18,7 +19,7 @@
 #include "../include/dryadalis_x86.h"
 
 const unsigned long x86_reg_c[] = {
-    X86_REG_INVALID,
+	X86_REG_INVALID,
 	X86_REG_AH, X86_REG_AL, X86_REG_AX, X86_REG_BH, X86_REG_BL,
 	X86_REG_BP, X86_REG_BPL, X86_REG_BX, X86_REG_CH, X86_REG_CL,
 	X86_REG_CS, X86_REG_CX, X86_REG_DH, X86_REG_DI, X86_REG_DIL,
@@ -33,8 +34,10 @@ const unsigned long x86_reg_c[] = {
 	X86_REG_CR6, X86_REG_CR7, X86_REG_CR8, X86_REG_CR9, X86_REG_CR10,
 	X86_REG_CR11, X86_REG_CR12, X86_REG_CR13, X86_REG_CR14, X86_REG_CR15,
 	X86_REG_DR0, X86_REG_DR1, X86_REG_DR2, X86_REG_DR3, X86_REG_DR4,
-	X86_REG_DR5, X86_REG_DR6, X86_REG_DR7, X86_REG_FP0, X86_REG_FP1,
-	X86_REG_FP2, X86_REG_FP3, X86_REG_FP4, X86_REG_FP5, X86_REG_FP6, X86_REG_FP7,
+	X86_REG_DR5, X86_REG_DR6, X86_REG_DR7, X86_REG_DR8, X86_REG_DR9,
+	X86_REG_DR10, X86_REG_DR11, X86_REG_DR12, X86_REG_DR13, X86_REG_DR14,
+	X86_REG_DR15, X86_REG_FP0, X86_REG_FP1, X86_REG_FP2, X86_REG_FP3,
+	X86_REG_FP4, X86_REG_FP5, X86_REG_FP6, X86_REG_FP7,
 	X86_REG_K0, X86_REG_K1, X86_REG_K2, X86_REG_K3, X86_REG_K4,
 	X86_REG_K5, X86_REG_K6, X86_REG_K7, X86_REG_MM0, X86_REG_MM1,
 	X86_REG_MM2, X86_REG_MM3, X86_REG_MM4, X86_REG_MM5, X86_REG_MM6,
@@ -66,13 +69,14 @@ const unsigned long x86_reg_c[] = {
 	X86_REG_R9D, X86_REG_R10D, X86_REG_R11D, X86_REG_R12D, X86_REG_R13D,
 	X86_REG_R14D, X86_REG_R15D, X86_REG_R8W, X86_REG_R9W, X86_REG_R10W,
 	X86_REG_R11W, X86_REG_R12W, X86_REG_R13W, X86_REG_R14W, X86_REG_R15W,
-	X86_REG_ENDING // <-- mark the end of the list of registers
+
+	X86_REG_ENDING		// <-- mark the end of the list of registers
 };
 
 hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
-    hashmap->value = calloc(1, sizeof(x86_reg_c));
+    hashmap->value = calloc(1, (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])) * sizeof(unsigned long* ));
 
-    for (size_t i = 0; i < (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])); i++) { // iter through all the elem
+    for (size_t i = 0; x86_reg_c[i] != X86_REG_ENDING; i++) { // iter through all the elem
         hashmap->value[x86_reg_c[i]] = &(s_binary->dbi_handler->state->null_entry);
     }
 
@@ -175,3 +179,40 @@ unsigned long read_reg(int key, hashmap_t* hashmap) {
     return -1;
 }
 
+// return true if the target flag is set in @eflags
+
+_Bool is_cf(unsigned long eflags) {
+    return (eflags & CF) != 0;
+}
+
+_Bool is_pf(unsigned long eflags) {
+    return (eflags & PF) != 0;
+}
+
+_Bool is_af(unsigned long eflags) {
+    return (eflags & AF) != 0;
+}
+
+_Bool is_zf(unsigned long eflags) {
+    return (eflags & ZF) != 0;
+}
+
+_Bool is_sf(unsigned long eflags) {
+    return (eflags & SF) != 0;
+}
+
+_Bool is_tf(unsigned long eflags) {
+    return (eflags & TF) != 0;
+}
+
+_Bool is_if(unsigned long eflags) {
+    return (eflags & IF) != 0;
+}
+
+_Bool is_df(unsigned long eflags) {
+    return (eflags & DF) != 0;
+}
+
+_Bool is_of(unsigned long eflags) {
+    return (eflags & OF) != 0;
+}

@@ -13,7 +13,8 @@
 
 int test(void* s_binary) {
     unsigned long rip = ((mdata_binary_t* )s_binary)->dbi_handler->state->rip;
-    // fprintf(stdout, "rip: %lx\n", rip);
+    fprintf(stdout, "rip: %lx\n", rip);
+    return 0;
 }
 
 int main(int argc, char **argv) {

@@ -9,6 +9,10 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 #include <stdbool.h>
+#include <sys/syscall.h>
+#include <asm/ldt.h>   
+#include <asm/prctl.h>
+#include <sys/prctl.h>
 
 #include "kernel_list.h"
 
@@ -27,6 +31,18 @@
 
 #define INSTRUMENTED_FS 0x14f000
 #define INSTRUMENTED_GS 0x15f000
+
+// eflags
+
+#define CF (1 << 0)
+#define PF (1 << 2)
+#define AF (1 << 4)
+#define ZF (1 << 6)
+#define SF (1 << 7)
+#define TF (1 << 8)
+#define IF (1 << 9)
+#define DF (1 << 10)
+#define OF (1 << 11)
 
 // structures
 
@@ -180,6 +196,7 @@ _Bool is_rwx(unsigned long addr, mdata_binary_t* s_binary);
 // returns the prot according to the address
 int prot(unsigned long addr, mdata_binary_t* s_binary);
 unsigned long* map_stack();
+int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size);
 
 // engine
 
@@ -203,7 +220,7 @@ int restore_bytes(hook_t* hook, int prot);
 int write_hook(mdata_binary_t* s_binary, hook_t* hook);
 int host_save_state(state_rtime_t* state);
 
-static int arch_prctl(int func, void *ptr);
+int arch_prctl(int func, void *ptr);
 int set_fs_gs(void* fs, void* gs);
 
 // state_runt
@@ -218,5 +235,15 @@ _Bool is_16bits(int reg);
 _Bool is_32bits(int reg);
 _Bool is_64bits(int reg);
 unsigned long read_reg(int key, hashmap_t* hashmap);
+
+_Bool is_cf(unsigned long eflags);
+_Bool is_pf(unsigned long eflags);
+_Bool is_af(unsigned long eflags);
+_Bool is_zf(unsigned long eflags);
+_Bool is_sf(unsigned long eflags);
+_Bool is_tf(unsigned long eflags);
+_Bool is_if(unsigned long eflags);
+_Bool is_df(unsigned long eflags);
+_Bool is_of(unsigned long eflags);
 
 #endif

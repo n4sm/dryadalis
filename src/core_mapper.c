@@ -365,18 +365,10 @@ int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t
     curr->prot = prot;
     curr->addr = addr;
     curr->size = size;
-    mem_map_t* iter = NULL;
 
     if (!s_binary->memory_map) {
         INIT_LIST_HEAD(&(curr->list));
     } else {
-        // list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
-        //     if ((iter->addr + curr->size + 1) == addr && prot == iter->prot) {
-        //         iter->size += size;
-        //         return 0;
-        //     }
-        // }
-
         list_add(&(curr->list), &(s_binary->memory_map->list));
     }
 
