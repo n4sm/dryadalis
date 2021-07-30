@@ -115,6 +115,9 @@ hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
     int group_r15[] = {X86_REG_R15B, X86_REG_R15W, X86_REG_R15D, X86_REG_R15};
     group_make_link(hashmap, group_r15, s_binary->dbi_handler->state->r15);
 
+    int group_eflags[] = {X86_REG_EFLAGS};
+    group_make_link(hashmap, group_eflags, s_binary->dbi_handler->state->rflags);
+
     return hashmap;
 }
 
@@ -131,36 +134,36 @@ void update_reg(int key, hashmap_t* hashmap, unsigned long value) {
 }
 
 _Bool is_8bits_right(int reg) {
-    return (reg == X86_REG_AL) | (reg == X86_REG_BL) | (reg == X86_REG_CL)
-                             | (reg == X86_REG_DL) | (reg == X86_REG_DIL) | (reg == X86_REG_SIL) | (reg == X86_REG_BPL) | (reg == X86_REG_SPL)
-                             | (reg == X86_REG_R8B) | (reg == X86_REG_R9B) | (reg == X86_REG_R10B) | (reg == X86_REG_R11B) | (reg == X86_REG_R12B) | (reg == X86_REG_R13B)
-                             | (reg == X86_REG_R14B) | (reg == X86_REG_R15B);
+    return (reg == X86_REG_AL) || (reg == X86_REG_BL) || (reg == X86_REG_CL)
+                             || (reg == X86_REG_DL) || (reg == X86_REG_DIL) || (reg == X86_REG_SIL) || (reg == X86_REG_BPL) || (reg == X86_REG_SPL)
+                             || (reg == X86_REG_R8B) || (reg == X86_REG_R9B) || (reg == X86_REG_R10B) || (reg == X86_REG_R11B) || (reg == X86_REG_R12B) || (reg == X86_REG_R13B)
+                             || (reg == X86_REG_R14B) || (reg == X86_REG_R15B);
 }
 
 _Bool is_8bits_left(int reg) {
-    return (reg == X86_REG_AH) | (reg == X86_REG_BH) | (reg == X86_REG_CH)
-                             | (reg == X86_REG_DH);
+    return (reg == X86_REG_AH) || (reg == X86_REG_BH) || (reg == X86_REG_CH)
+                             || (reg == X86_REG_DH);
 }
 
 _Bool is_16bits(int reg) {
-    return (reg == X86_REG_AX) | (reg == X86_REG_BX) | (reg == X86_REG_CX) | (reg == X86_REG_DX) | (reg == X86_REG_SI) 
-                             | (reg == X86_REG_DI) | (reg == X86_REG_BP) | (reg == X86_REG_SP) | (reg == X86_REG_R8W) | (reg == X86_REG_R9W)
-                             | (reg == X86_REG_R10W) | (reg == X86_REG_R11W) | (reg == X86_REG_R12W) | (reg == X86_REG_R13W)
-                             | (reg == X86_REG_R14W) | (reg == X86_REG_R15W);
+    return (reg == X86_REG_AX) || (reg == X86_REG_BX) || (reg == X86_REG_CX) || (reg == X86_REG_DX) || (reg == X86_REG_SI) 
+                             || (reg == X86_REG_DI) || (reg == X86_REG_BP) || (reg == X86_REG_SP) || (reg == X86_REG_R8W) || (reg == X86_REG_R9W)
+                             || (reg == X86_REG_R10W) || (reg == X86_REG_R11W) || (reg == X86_REG_R12W) || (reg == X86_REG_R13W)
+                             || (reg == X86_REG_R14W) || (reg == X86_REG_R15W);
 }
 
 _Bool is_32bits(int reg) {
-    return (reg == X86_REG_EAX) | (reg == X86_REG_EBX) | (reg == X86_REG_ECX) | (reg == X86_REG_EDX) | (reg == X86_REG_ESI)
-                             | (reg == X86_REG_EDI) | (reg == X86_REG_EBP) | (reg == X86_REG_ESP) | (reg == X86_REG_R8D) | (reg == X86_REG_R9D)
-                             | (reg == X86_REG_R10D) | (reg == X86_REG_R11D) | (reg == X86_REG_R12D) | (reg == X86_REG_R13D)
-                             | (reg == X86_REG_R14D) | (reg == X86_REG_R15D);
+    return (reg == X86_REG_EAX) || (reg == X86_REG_EBX) || (reg == X86_REG_ECX) || (reg == X86_REG_EDX) || (reg == X86_REG_ESI)
+                             || (reg == X86_REG_EDI) || (reg == X86_REG_EBP) || (reg == X86_REG_ESP) || (reg == X86_REG_R8D) || (reg == X86_REG_R9D)
+                             || (reg == X86_REG_R10D) || (reg == X86_REG_R11D) || (reg == X86_REG_R12D) || (reg == X86_REG_R13D)
+                             || (reg == X86_REG_R14D) || (reg == X86_REG_R15D);
 }
 
 _Bool is_64bits(int reg) {
-    return (reg == X86_REG_RAX) | (reg == X86_REG_RBX) | (reg == X86_REG_RCX) | (reg == X86_REG_RDX) | (reg == X86_REG_RSI)
-                             | (reg == X86_REG_RDI) | (reg == X86_REG_RBP) | (reg == X86_REG_RSP) | (reg == X86_REG_R8) | (reg == X86_REG_R9)
-                             | (reg == X86_REG_R10) | (reg == X86_REG_R11) | (reg == X86_REG_R12) | (reg == X86_REG_R13)
-                             | (reg == X86_REG_R14) | (reg == X86_REG_R15);
+    return (reg == X86_REG_RAX) || (reg == X86_REG_RBX) || (reg == X86_REG_RCX) || (reg == X86_REG_RDX) || (reg == X86_REG_RSI)
+                             || (reg == X86_REG_RDI) || (reg == X86_REG_RBP) || (reg == X86_REG_RSP) || (reg == X86_REG_R8) || (reg == X86_REG_R9)
+                             || (reg == X86_REG_R10) || (reg == X86_REG_R11) || (reg == X86_REG_R12) || (reg == X86_REG_R13)
+                             || (reg == X86_REG_R14) || (reg == X86_REG_R15) || (reg == X86_REG_EFLAGS);
 }
 
 unsigned long read_reg(int key, hashmap_t* hashmap) {
@@ -181,38 +184,3 @@ unsigned long read_reg(int key, hashmap_t* hashmap) {
 
 // return true if the target flag is set in @eflags
 
-_Bool is_cf(unsigned long eflags) {
-    return (eflags & CF) != 0;
-}
-
-_Bool is_pf(unsigned long eflags) {
-    return (eflags & PF) != 0;
-}
-
-_Bool is_af(unsigned long eflags) {
-    return (eflags & AF) != 0;
-}
-
-_Bool is_zf(unsigned long eflags) {
-    return (eflags & ZF) != 0;
-}
-
-_Bool is_sf(unsigned long eflags) {
-    return (eflags & SF) != 0;
-}
-
-_Bool is_tf(unsigned long eflags) {
-    return (eflags & TF) != 0;
-}
-
-_Bool is_if(unsigned long eflags) {
-    return (eflags & IF) != 0;
-}
-
-_Bool is_df(unsigned long eflags) {
-    return (eflags & DF) != 0;
-}
-
-_Bool is_of(unsigned long eflags) {
-    return (eflags & OF) != 0;
-}

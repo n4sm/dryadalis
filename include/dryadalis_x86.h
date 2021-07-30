@@ -43,6 +43,9 @@
 #define IF (1 << 9)
 #define DF (1 << 10)
 #define OF (1 << 11)
+#define NT (1 << 14)
+#define RF (1 << 16)
+#define AC (1 << 18)
 
 // structures
 
@@ -222,6 +225,8 @@ int host_save_state(state_rtime_t* state);
 
 int arch_prctl(int func, void *ptr);
 int set_fs_gs(void* fs, void* gs);
+_Bool is_set(mdata_binary_t* s_binary, int flag);
+_Bool is_jmp_taken(int id, mdata_binary_t* s_binary);
 
 // state_runt
 

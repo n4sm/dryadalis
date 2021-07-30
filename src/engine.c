@@ -54,6 +54,8 @@ _Bool is_cflow(int group) {
         return true;
     } else if (group == X86_GRP_RET) {
         return true;
+    } else if (group == X86_GRP_BRANCH_RELATIVE) {
+        return true;
     }
 
     return false;
@@ -61,6 +63,10 @@ _Bool is_cflow(int group) {
 
 _Bool is_ret(int group) {
     return (group == X86_GRP_RET);
+}
+
+_Bool is_call(int group) {
+    return (group == X86_GRP_CALL);
 }
 
 _Bool is_endbr64(unsigned char* s) {
@@ -246,7 +252,11 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
     }
 
     s_binary->dbi_handler->dump_stub = encode;
-    sprintf(insns, "         mov rax, rbx;\
+    sprintf(insns, "         mov rax, rsp;\
+                             movabs [%p], rax; \
+                             mov rsp, 0x%lx;\
+            pushfq; pop rax; movabs [%p], rax; \
+                             mov rax, rbx;\
                              movabs [%p], rax; \
                              mov rax, rcx;\
                              movabs [%p], rax; \
@@ -256,11 +266,8 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                              movabs [%p], rax; \
                              mov rax, rdi;\
                              movabs [%p], rax; \
-                             mov rax, rsp;\
-                             movabs [%p], rax; \
                              mov rax, rbp;\
                              movabs [%p], rax; \
-            pushfq; pop rax; movabs [%p], rax; \
                 mov rax, es; movabs [%p], rax; \
                 mov rax, gs; movabs [%p], rax; \
                 mov rax, fs; movabs [%p], rax; \
@@ -283,22 +290,21 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                              movabs [%p], rax; \
                              mov rax, r15;\
                              movabs [%p], rax; \
-                             mov rsp, 0x%lx;\
                              mov rdi, 0x%lx; \
                              mov rax, 0x%lx; \
                              push 0x0;\
                              push rax;\
                              movabs rax, [%p];\
                              movabs [%p], rax;\
-                             ret", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
+                             ret", &(s_binary->dbi_handler->state->rsp), (unsigned long)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
                                                            &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
-                                                           &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rbp), \
-                                                           &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
+                                                           &(s_binary->dbi_handler->state->rbp), \
+                                                           &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
                                                            &(s_binary->dbi_handler->state->fs), &(s_binary->dbi_handler->state->cs), &(s_binary->dbi_handler->state->ss), \
                                                            &(s_binary->dbi_handler->state->ds), &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), \
                                                            &(s_binary->dbi_handler->state->r10), &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), \
                                                            &(s_binary->dbi_handler->state->r13), &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15), \
-                                                           (unsigned long)(s_binary->dbi_handler->host_rsp), (unsigned long)s_binary, (unsigned long)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
+                                                           (unsigned long)s_binary, (unsigned long)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -583,37 +589,88 @@ void _dispatcher(mdata_binary_t* s_binary) {
 }
 //== internal functions used by eval_target
 
-// returns true if according to @cs_eflags the checked flags 
-// are set in read_reg(X86_REG_EFLAGS, s_binary) else true because 
-// we assume it does not check the flags 
-_Bool is_set(unsigned long cs_eflags, mdata_binary_t* s_binary) {
-    if (cs_eflags & X86_EFLAGS_TEST_AF) {
-        return is_af(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_CF) {
-        return is_cf(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_DF) {
-        return is_df(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_IF) {
-        return is_if(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_OF) {
-        return is_of(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_SF) {
-        return is_sf(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_TF) {
-        return is_tf(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    } else if (cs_eflags & X86_EFLAGS_TEST_ZF) {
-        return is_zf(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap));
-    }
-
-    return true;
+// Does the instruction tests flags ?
+_Bool is_test(unsigned long cs_eflags) {
+    return (cs_eflags & (X86_EFLAGS_TEST_AF | X86_EFLAGS_TEST_CF | X86_EFLAGS_TEST_DF | X86_EFLAGS_TEST_IF | X86_EFLAGS_TEST_OF | X86_EFLAGS_TEST_SF | X86_EFLAGS_TEST_TF | X86_EFLAGS_TEST_ZF)) != 0;
 }
 
+// return true if the target flag is set in @eflags
+_Bool is_set(mdata_binary_t* s_binary, int flag) {
+    fprintf(stdout, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
+    unsigned long eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
+    
+    if (-1 == eflags) {
+        fprintf(stdout, "FATAL read eflags\n");
+        exit(-1);
+    }
+
+    return (eflags & flag) != 0;
+}
+
+_Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
+    switch (id) {
+        case X86_INS_JE:
+            return is_set(s_binary, ZF);
+        case X86_INS_JNE:
+            return !is_set(s_binary, ZF);
+        
+        case X86_INS_JA:
+            return !is_set(s_binary, CF) && !is_set(s_binary, ZF);
+        case X86_INS_JAE:
+            return !is_set(s_binary, CF);
+    
+        case X86_INS_JB:
+            return is_set(s_binary, CF);
+        case X86_INS_JBE:
+            return is_set(s_binary, CF) && is_set(s_binary, ZF);   
+
+        case X86_INS_JCXZ:
+            return !read_reg(X86_REG_CX, s_binary->dbi_handler->hashmap);
+        case X86_INS_JECXZ:
+            return !read_reg(X86_REG_ECX, s_binary->dbi_handler->hashmap);
+        case X86_INS_JRCXZ:
+            return !read_reg(X86_REG_RCX, s_binary->dbi_handler->hashmap);
+
+        case X86_INS_JG:
+            return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
+        case X86_INS_JGE:
+            return  (((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) == ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> OF));
+
+        case X86_INS_JL:
+            return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
+        case X86_INS_JLE:
+            return is_set(s_binary, ZF) || ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> OF);
+
+        case X86_INS_JO:
+            return is_set(s_binary, OF);
+        case X86_INS_JNO:
+            return !is_set(s_binary, OF);
+
+        case X86_INS_JP:
+            return is_set(s_binary, PF);
+        case X86_INS_JNP:
+            return !is_set(s_binary, PF);
+
+        case X86_INS_JS:
+            return is_set(s_binary, SF);
+        case X86_INS_JNS:
+            return !is_set(s_binary, SF);
+
+        case X86_INS_JMP:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+// ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> F)
+
 long sign_extend(size_t size, unsigned long value) {
-    return (long) ((value & (1 << (size-1))) | ((value << 1) >> 1));
+    return (unsigned long) ((value & (1 << (size-1))) | ((value << 1) >> 1));
 }
 
 unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) {
-    unsigned long target = 0x0;
     csh handle;
 	cs_insn *insn;
     ssize_t count;
@@ -634,42 +691,42 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
     cs_detail* details = insn->detail;
     cs_x86* x86 = &(details->x86);
 
-    // did the jmp has been taken or not ?
-    if (x86->op_count) {
-        if (is_set(x86->eflags, s_binary)) {
-            cs_x86_op* operand = &(x86->operands[0]);
-            switch (operand->type) {
-                case X86_OP_REG:
-                    target = read_reg(operand->reg, s_binary->dbi_handler->hashmap);
-                    break;
-                case X86_OP_IMM:
-                    target = (unsigned long)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
-                    break;
-                case X86_OP_MEM:
-                    // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
-                    target = *((unsigned long *)(read_reg(operand->mem.base, s_binary->dbi_handler->hashmap)
-                        + read_reg(operand->mem.index, s_binary->dbi_handler->hashmap)
-                        * operand->mem.scale
-                        + operand->mem.disp));
-                    break;
-                default:
-                    target = -1;
-                    break;
-            }
-        }
-    } else {
-        // jmp not taken
-        // we let the return make the work
-    }
-
     for (size_t i = 0; i < details->groups_count; i++) {
-        if (is_ret(details->groups[i])) {
-            target = *((unsigned long* )read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap));
+        if (details->groups[i] == X86_GRP_JUMP || details->groups[i] == X86_GRP_BRANCH_RELATIVE || is_call(details->groups[i])) {
+            if (is_call(details->groups[i]) || is_jmp_taken(insn->id, s_binary)) {
+                fprintf(stdout, " taken ");
+                cs_x86_op* operand = &(x86->operands[0]);
+                switch (operand->type) {
+                    case X86_OP_REG:
+                        return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
+                    case X86_OP_IMM:
+                        return (unsigned long)(((sign_extend(operand->size, operand->imm) << 1) >> 1) + s_binary->dbi_handler->state->rip);
+                    case X86_OP_MEM:
+                        // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
+                        return *((unsigned long *)(read_reg(operand->mem.base, s_binary->dbi_handler->hashmap)
+                            + read_reg(operand->mem.index, s_binary->dbi_handler->hashmap)
+                            * operand->mem.scale
+                            + operand->mem.disp));
+                    default:
+                        fprintf(stdout, "error operand jmp\n");
+                        return -1;
+                }
+            } else {
+                fprintf(stdout, " not taken ");
+                // jmp not taken
+                return (unsigned long)(instruction + insn->size);
+            }
+        } else if (is_ret(details->groups[i])) {
+            return *((unsigned long* )read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap));
         }
     }
+    
 
+
+    //fprintf(stdout, ", target: %lx\n", !target ? (unsigned long)(instruction + insn->size) : target);
+    // if that's not a return, a call or a jmp it can be an interrupt and we handle that by a diffrent way so we ignore it for now
     cs_free(insn, count);
-    return !target ? (unsigned long)(instruction + insn->size) : target;
+    return (unsigned long)(instruction + insn->size);
 }
 
 // =-=-=-=-
