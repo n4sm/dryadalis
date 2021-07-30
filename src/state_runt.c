@@ -181,6 +181,3 @@ unsigned long read_reg(int key, hashmap_t* hashmap) {
 
     return -1;
 }
-
-// return true if the target flag is set in @eflags
-
