@@ -86,9 +86,6 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
         return -1;
     }
 
-    unsigned char* insn_buf = calloc(1, size);
-    memcpy(insn_buf, (void* )addr, size);
-
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
         fprintf(stderr, "FATAL capstone\n");
         return -1;
@@ -101,23 +98,21 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
     }
 
     if (size > 4) {
-        if (is_endbr64(insn_buf)) {
+        if (is_endbr64(addr)) {
             fprintf(stdout, "0x%lx:\t%s\n", addr, "endbr64");
-            insn_buf += 4;
+            addr += 4;
             size -= 4;
             n += 4;
-            addr += 4;
         }
     }
 
-    while(cs_disasm_iter(handle, (const uint8_t **)&insn_buf, &size, &addr, insn)) {
+    while(cs_disasm_iter(handle, (const uint8_t **)&addr, &size, &addr, insn)) {
         // analyze disassembled instruction in @insn variable ...
         // NOTE: @code, @code_size & @address variables are all updated
         // to point to the next instruction after each iteration.
         if (size > 4) {
-            if (is_endbr64(insn_buf)) {
+            if (is_endbr64(addr)) {
                 fprintf(stdout, "0x%lx:\t%s\n", addr, "endbr64");
-                insn_buf += 4;
                 size -= 4;
                 n += 4;
                 addr += 4;
@@ -133,11 +128,16 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
             }
         }
 
+        if (!is_mapped(addr + insn->size, s_binary)) {
+            fprintf(stderr, "FATAL found nothing\n");
+            cs_free(insn, 1);
+            return -1;
+        }
+
         n += insn->size;
     }
 
-    free(insn_buf);
-    cs_free(insn, 1);
+    
     fprintf(stderr, "FATAL found nothing\n");
     return -1;
 }
