@@ -32,6 +32,8 @@
 #define INSTRUMENTED_FS 0x14f000
 #define INSTRUMENTED_GS 0x15f000
 
+#define STACK_SZ 0x50000
+
 // eflags
 
 #define CF (1 << 0)
@@ -181,10 +183,11 @@ int add_auxvt(unsigned long id, unsigned long* origin, unsigned long *base_auxvt
 
 // core_mapper
 
-mdata_binary_t *map_binary(const char *filename);
-mdata_binary_t *load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
+mdata_binary_t* map_binary(const char *filename, arg_t* arguments);
+mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
-void exec_binary(mdata_binary_t* s_binary, char **argv, int argc);
+unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc);
+void exec_binary(mdata_binary_t* s_binary);
 int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size);
 int free_memory_map(mem_map_t* memory_map);
 int log_map(mem_map_t* memory_map);
@@ -204,14 +207,14 @@ int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t 
 // engine
 
 // returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary);
+int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, size_t size);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
 unsigned long craft_hook(mdata_binary_t* s_binary);
 int restore_hook(unsigned char* patch, mdata_binary_t* s_binary);
 
-int instrument(mdata_binary_t* s_binary, u_callback_t callback, arg_t* arguments);
+int instrument(mdata_binary_t* s_binary, u_callback_t callback);
 unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook);
 
 unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary);
@@ -219,7 +222,7 @@ void _dispatcher(mdata_binary_t* s_binary);
 
 void alloc_state(mdata_binary_t* s_binary);
 void continue_exec(mdata_binary_t* s_binary);
-int restore_bytes(hook_t* hook, int prot);
+int restore_bytes(hook_t* hook, mdata_binary_t* s_binary);
 int write_hook(mdata_binary_t* s_binary, hook_t* hook);
 int host_save_state(state_rtime_t* state);
 

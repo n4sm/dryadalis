@@ -40,7 +40,7 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
     unsigned char* interp_str = s_binary->fbinary + (s_binary->pie ? s_ph->p_vaddr : s_ph->p_offset);
     mdata_binary_t* s_binary_interp = NULL;
 
-    if (-1 == (long)(s_binary_interp = map_binary((const char* )interp_str)))
+    if (-1 == (long)(s_binary_interp = map_binary((const char* )interp_str, NULL)))
         return (mdata_binary_t*)-1;
     
     return s_binary_interp;
@@ -113,7 +113,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
 // *=*=*=*=*=*=*=
 
 // manual mapping of a binary from its filename
-mdata_binary_t* map_binary(const char *filename) {
+mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
     mdata_binary_t *s_binary = NULL;
     printf("[*] Loading %s\n", filename);
 
@@ -136,8 +136,16 @@ mdata_binary_t* map_binary(const char *filename) {
         }
     }
 
-    fprintf(stdout, "[*] %s mapped\n", s_binary->filename);
+    // we set rip 
+    s_binary->dbi_handler->state->rip = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base);
+    
+    // if there are arguments, we setup the stack
+    if (arguments) {
+        // it sets rsp
+        setup_stack(arguments->argv, s_binary, arguments->argc);
+    }
 
+    fprintf(stdout, "[*] %s mapped\n", s_binary->filename);
     return s_binary;
 }
 
@@ -146,7 +154,7 @@ mdata_binary_t* map_binary(const char *filename) {
 // creates a stack
 unsigned long* map_stack() {
     unsigned long* r = NULL;
-    if (MAP_FAILED == (r = mmap(NULL, 0x50000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0x0))) return (unsigned long*)-1;
+    if (MAP_FAILED == (r = mmap(NULL, STACK_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0x0))) return (unsigned long*)-1;
     return (unsigned long* )(r+0x5000);
 }
 
@@ -169,7 +177,7 @@ unsigned long auxvt(unsigned long* orig, unsigned long id) {
     return orig[i_orig+1];
 }
 
-// setup and returns a custom stack according to the arguments
+// setup and returns a custom stack for the guest according to the arguments
 unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     unsigned long *iter = (unsigned long* )argv;
     unsigned long* stack = NULL;
@@ -178,6 +186,10 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     if (-1 == (long)(stack = map_stack())) {
         return (unsigned long*)-1;
     }
+
+    // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
+    s_binary->dbi_handler->state->rsp = (unsigned long)stack;
+    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp-0x5000), PAGE_ROUND(STACK_SZ));
 
     stack[0] = argc-1;
     map_val(&iter[1], &stack[1]);
@@ -316,6 +328,10 @@ _Bool is_rx(unsigned long addr, mdata_binary_t* s_binary) {
 _Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
+    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size > addr) {
+        return true;
+    }
+
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
         if (curr->addr <= addr && (curr->addr + curr->size) > addr) {
             return true;
@@ -404,10 +420,7 @@ int log_map(mem_map_t* memory_map) {
 // *=*=*=*=*=*=*=*=
 
 // executes the binary
-void exec_binary(mdata_binary_t* s_binary, char **argv, int argc) {
-    unsigned long entry = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base);
-    unsigned long* stack = setup_stack(argv, s_binary, argc);
-
+void exec_binary(mdata_binary_t* s_binary) {
     __asm__ __volatile__ (
         "mov %0, %%rax\n"
         "mov %1, %%rsp\n"
@@ -428,5 +441,5 @@ void exec_binary(mdata_binary_t* s_binary, char **argv, int argc) {
         "push %%rax\n"
         "xor %%rax, %%rax\n"
         "ret\n"
-        :: "r"(entry), "r"(stack) :);
+        :: "r"(s_binary->dbi_handler->state->rip), "r"(s_binary->dbi_handler->state->rsp) :);
 }
