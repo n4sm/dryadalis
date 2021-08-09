@@ -33,6 +33,7 @@
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0x50000
+#define DEBUG true
 
 // eflags
 
@@ -207,7 +208,7 @@ int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t 
 // engine
 
 // returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, size_t size);
+int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct

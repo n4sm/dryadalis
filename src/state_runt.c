@@ -118,6 +118,9 @@ hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
     int group_eflags[] = {X86_REG_EFLAGS};
     group_make_link(hashmap, group_eflags, s_binary->dbi_handler->state->rflags);
 
+    int group_ip[] = {X86_REG_EIP, X86_REG_RIP};
+    group_make_link(hashmap, group_ip, s_binary->dbi_handler->state->rip);
+
     return hashmap;
 }
 
@@ -156,14 +159,14 @@ _Bool is_32bits(int reg) {
     return (reg == X86_REG_EAX) || (reg == X86_REG_EBX) || (reg == X86_REG_ECX) || (reg == X86_REG_EDX) || (reg == X86_REG_ESI)
                              || (reg == X86_REG_EDI) || (reg == X86_REG_EBP) || (reg == X86_REG_ESP) || (reg == X86_REG_R8D) || (reg == X86_REG_R9D)
                              || (reg == X86_REG_R10D) || (reg == X86_REG_R11D) || (reg == X86_REG_R12D) || (reg == X86_REG_R13D)
-                             || (reg == X86_REG_R14D) || (reg == X86_REG_R15D);
+                             || (reg == X86_REG_R14D) || (reg == X86_REG_R15D) || (reg == X86_REG_EIP);
 }
 
 _Bool is_64bits(int reg) {
     return (reg == X86_REG_RAX) || (reg == X86_REG_RBX) || (reg == X86_REG_RCX) || (reg == X86_REG_RDX) || (reg == X86_REG_RSI)
                              || (reg == X86_REG_RDI) || (reg == X86_REG_RBP) || (reg == X86_REG_RSP) || (reg == X86_REG_R8) || (reg == X86_REG_R9)
                              || (reg == X86_REG_R10) || (reg == X86_REG_R11) || (reg == X86_REG_R12) || (reg == X86_REG_R13)
-                             || (reg == X86_REG_R14) || (reg == X86_REG_R15) || (reg == X86_REG_EFLAGS);
+                             || (reg == X86_REG_R14) || (reg == X86_REG_R15) || (reg == X86_REG_EFLAGS) || (reg == X86_REG_RIP);
 }
 
 unsigned long read_reg(int key, hashmap_t* hashmap) {
