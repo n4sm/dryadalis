@@ -52,11 +52,36 @@
 
 // structures
 
+typedef struct args_syscall_s {
+    unsigned long rdi;
+    unsigned long rsi;
+    unsigned long rdx;
+    unsigned long rcx;
+    unsigned long r8;
+    unsigned long r9;
+} args_syscall_t;
+
 typedef int (*u_callback_t) (void* s_binary);
+typedef unsigned long (*hook_syscall) (args_syscall_t* arguments);
 
 typedef struct hashmap_s {
     unsigned long** value;
 } hashmap_t;
+
+/* Registers on entry:
+ * rax  system call number
+ * rcx  return address
+ * r11  saved rflags (note: r11 is callee-clobbered register in C ABI)
+ * rdi  arg0
+ * rsi  arg1
+ * rdx  arg2
+ * r10  arg3 (needs to be moved to rcx to conform to C ABI)
+ * r8   arg4
+ * r9   arg5
+ * (note: r12-r15, rbp, rbx are callee-preserved in C ABI)
+ *
+ * Only called from user space.
+*/
 
 typedef struct state_rtime_s {
     unsigned long rax;
@@ -208,7 +233,7 @@ int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t 
 // engine
 
 // returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary);
+int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
@@ -254,5 +279,9 @@ _Bool is_tf(unsigned long eflags);
 _Bool is_if(unsigned long eflags);
 _Bool is_df(unsigned long eflags);
 _Bool is_of(unsigned long eflags);
+
+// syscall_hook
+
+
 
 #endif

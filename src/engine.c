@@ -69,12 +69,16 @@ _Bool is_call(int group) {
     return (group == X86_GRP_CALL);
 }
 
+_Bool is_interrupt(int group) {
+    return group == X86_GRP_INT;
+}
+
 _Bool is_endbr64(unsigned char* s) {
     return !memcmp(s, "\xf3\x0f\x1e\xfa", 4);
 }
 
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
+int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     csh handle;
     unsigned long page_offt = PAGE_OFFT(addr);
     unsigned char insn_buffer[PAGE_SZ] = {0};
@@ -139,6 +143,11 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
         }
         
         for (size_t i = 0; i < insn->detail->groups_count; i++) {
+            if (beg && insn->detail->groups[i] == X86_GRP_INT) {
+                beg = false;
+                continue;
+            }
+
             if (is_cflow(insn->detail->groups[i])) {
                 cs_free(insn, 1);
                 return n;
@@ -155,7 +164,7 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary) {
         }
         
         cs_free(insn, 1);
-        return opcodes_cflow(addr, s_binary);
+        return opcodes_cflow(addr, s_binary, false);
     }
 
     cs_free(insn, 1);
@@ -544,7 +553,7 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
 
 // internal part, returns the offset right after the cflow instruction
 unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
-    off_t off_cflow = opcodes_cflow(hook->jmp, s_binary);
+    off_t off_cflow = opcodes_cflow(hook->jmp, s_binary, true);
 
     if (-1 == off_cflow) {
         fprintf(stderr, "FATAL opcodes_cflow\n");
@@ -800,6 +809,8 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
             
             s_binary->dbi_handler->state->rsp += 8;
             return *((unsigned long* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
+        } else if (is_interrupt(details->groups[i])) {
+            return instruction;
         }
     }
 
