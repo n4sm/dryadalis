@@ -189,7 +189,7 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
     // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
     s_binary->dbi_handler->state->rsp = (unsigned long)stack;
-    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp-0x5000), PAGE_ROUND(STACK_SZ));
+    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ));
 
     stack[0] = argc-1;
     map_val(&iter[1], &stack[1]);

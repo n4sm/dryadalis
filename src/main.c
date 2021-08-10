@@ -15,9 +15,9 @@ int insn_count;
 
 int test(void* s_binary) {
     unsigned long rip = ((mdata_binary_t* )s_binary)->dbi_handler->state->rip;
-    fprintf(stdout, "rip: %lx, ", rip);
+    // fprintf(stdout, "rip: %lx, ", rip);
     // insn_count += 1;
-    //fprintf(stdout, "insn_count: %x\n", insn_count);
+    // fprintf(stdout, "insn_count: %x\n", insn_count);
     return 0;
 }
 

@@ -80,10 +80,10 @@ _Bool is_endbr64(unsigned char* s) {
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
 int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     csh handle;
-    unsigned long page_offt = PAGE_OFFT(addr);
     unsigned char insn_buffer[PAGE_SZ] = {0};
-    unsigned char* insn_buf = insn_buffer;
     unsigned long saved_addr = addr;
+    unsigned char* insn_buf = insn_buffer;
+    
     size_t size = PAGE_SZ;
     int n = 0;
 
@@ -123,7 +123,7 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     //     }
     // }
 
-    while(cs_disasm_iter(handle, &insn_buf, &size, &addr, insn)) {
+    while(cs_disasm_iter(handle, (const uint8_t **)&insn_buf, &size, &addr, insn)) {
         // if (size > 4) {
         //     if (is_endbr64((unsigned char* )addr)) {
         //         if (DEBUG) {
@@ -143,18 +143,14 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
         }
         
         for (size_t i = 0; i < insn->detail->groups_count; i++) {
-            if (beg && insn->detail->groups[i] == X86_GRP_INT) {
-                beg = false;
-                continue;
-            }
-
-            if (is_cflow(insn->detail->groups[i])) {
+            if (is_cflow(insn->detail->groups[i]) && (!beg || insn->detail->groups[i] != X86_GRP_INT)) {
                 cs_free(insn, 1);
                 return n;
             }
         }
 
         n += insn->size;
+        beg = false;
     }
 
     if (is_mapped((addr), s_binary) && addr != saved_addr) {
@@ -522,7 +518,7 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
 int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
     size_t mprotect_size = (PAGE_OFFT(hook->jmp) + hook->length) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ;
     int prot_curr = prot(hook->jmp, s_binary);
-    // int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
+    int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
 
     if (mprotect_size > PAGE_SZ && !is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
         fprintf(stderr, "PAGE IS NOT MAPPED\n");
@@ -542,11 +538,11 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
     
     memcpy((void* )(hook->jmp), hook->code, hook->length);
 
-    if (mprotect((void* )PAGE_ALIGN((hook->jmp)), mprotect_size, prot_curr)) {
+    if (mprotect((void* )PAGE_ALIGN((hook->jmp)), PAGE_SZ, prot_curr)) {
         return -1;
-    }// } else if (mprotect((void* )PAGE_ALIGN((hook->jmp+PAGE_SZ)), PAGE_SZ, prot_next))  {
-    //     return -1;
-    // }
+    } else if (mprotect((void* )PAGE_ALIGN((hook->jmp+PAGE_SZ)), PAGE_SZ, prot_next))  {
+        return -1;
+    }
 
     return 0;
 }
@@ -572,7 +568,7 @@ unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
 int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
     size_t mprotect_size = (PAGE_OFFT(hook->jmp) + hook->length) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ;
     int prot_curr = prot(hook->jmp, s_binary);
-    // int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
+    int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
 
     if (-1  == mprotect((void* )PAGE_ALIGN(hook->jmp), mprotect_size, PROT_WRITE | PROT_READ)) {
         return -1;
@@ -582,13 +578,13 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
         ((unsigned char* )hook->jmp)[i] = hook->orig_bytes[i];
     }
 
-    if (-1  == mprotect((void* )PAGE_ALIGN(hook->jmp), mprotect_size, prot_curr)) {
+    if (-1  == mprotect((void* )PAGE_ALIGN(hook->jmp), PAGE_SZ, prot_curr)) {
         return -1;
     }
 
-    // if (mprotect_size > PAGE_SZ && mprotect((void* )PAGE_ALIGN(hook->jmp + PAGE_SZ), PAGE_SZ, prot_next)) {
-    //     return -1;
-    // }
+    if (mprotect_size > PAGE_SZ && mprotect((void* )PAGE_ALIGN((hook->jmp + PAGE_SZ)), PAGE_SZ, prot_next)) {
+        return -1;
+    }
 
     return 0;
 }
@@ -608,6 +604,10 @@ void _dispatcher(mdata_binary_t* s_binary) {
         exit(-1);
     }
 
+    if (DEBUG) {
+        fprintf(stdout, " = * = [ . ] = * =\n");
+    }
+
     unsigned long target = eval_target((void* )*(s_binary->dbi_handler->curr_hook), s_binary);
     if (-1 == target) {
         fprintf(stderr, "FATAL eval_target \n");
@@ -615,7 +615,7 @@ void _dispatcher(mdata_binary_t* s_binary) {
     }
 
     if (DEBUG) {
-        fprintf(stdout, "cflow target: 0x%lx\n", target);  
+        fprintf(stdout, "cflow target: 0x%lx\n", target);
     }
 
     s_binary->dbi_handler->dump->jmp = target;
@@ -719,7 +719,6 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 	cs_insn *insn;
     ssize_t count;
     char buf_insn[16] = {0};
-    unsigned long target = 0x0;
     _Bool achieve = false;
 
     if (!instruction) {
@@ -740,12 +739,11 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
     for (size_t i = 0; i < details->groups_count; i++) {
         if (details->groups[i] == X86_GRP_JUMP || details->groups[i] == X86_GRP_BRANCH_RELATIVE || is_call(details->groups[i])) {
             if (is_call(details->groups[i]) || is_jmp_taken(insn->id, s_binary)) {
-                
+                cs_x86_op* operand = &(x86->operands[0]);
+
                 if (DEBUG) {
                     fprintf(stdout, " taken ");
                 }
-                
-                cs_x86_op* operand = &(x86->operands[0]);
 
                 if (is_call(details->groups[i]) && !achieve) {
                     // we emulate the call instruction
@@ -763,8 +761,10 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                 switch (operand->type) {
                     unsigned long base, index;
                     case X86_OP_REG:
+                        cs_free(insn, count);
                         return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
                     case X86_OP_IMM:
+                        cs_free(insn, count);
                         return (unsigned long)(((sign_extend(operand->size, operand->imm) << 1) >> 1) + s_binary->dbi_handler->state->rip);
                     case X86_OP_MEM:
                         // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
@@ -774,20 +774,22 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                         } else {
                             index = 0x0;
                         }
-                        
+
                         if (-1 != base && -1 != index) {
                             if (operand->mem.base == X86_REG_RIP) {
                                 base += insn->size;
                             }
 
                             if (DEBUG) {
-                                fprintf(stdout, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %x ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
+                                fprintf(stdout, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
                             }
 
+                            cs_free(insn, count);
                             return *((unsigned long* )(base + index * operand->mem.scale + operand->mem.disp));
                         }
 
                         fprintf(stderr, "failed to read registers, base [ %x ] => [ %lx ], index [ %x ] => [ %lx ]\n", operand->mem.base, base, operand->mem.index, index);
+                        cs_free(insn, count);
                         return -1;
 
                     default:
@@ -795,22 +797,35 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                         return -1;
                 }
             } else {
+                // jmp not taken
                 if (DEBUG) {
                     fprintf(stdout, " not taken ");
                 }
-                
-                // jmp not taken
+
+                cs_free(insn, count);
                 return (unsigned long)(instruction + insn->size);
             }
         } else if (is_ret(details->groups[i])) {
-            if (DEBUG) {
-                fprintf(stdout, " taken ");
-            }
-            
             s_binary->dbi_handler->state->rsp += 8;
+            cs_free(insn, count);
             return *((unsigned long* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
         } else if (is_interrupt(details->groups[i])) {
-            return instruction;
+            hook_syscall sys_callback = NULL;
+            unsigned long ret = 0x0;
+            size_t sz = insn->size;
+            
+            if (-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
+                if ((ret = sys_callback(s_binary->dbi_handler->state))) {
+                    // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
+                    cs_free(insn, count);
+                    return ret;
+                }
+
+                cs_free(insn, count);
+                return (unsigned long)(instruction + sz);
+            }
+
+            return (unsigned long)instruction;
         }
     }
 
