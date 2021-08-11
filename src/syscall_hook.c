@@ -25,17 +25,17 @@
 
 // ==
 
-unsigned long hook_brk(state_rtime_t* state) {
+unsigned long hook_brk(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     state->rax = syscall(__NR_brk, state->rdi);
 
     // if (DEBUG) {
-    fprintf(stdout, "[ * ] brk(%lx) = %lx\n", state->rdi, state->rax);
+    fprintf(stdout, "[ =*= ] brk(%lx) = %lx\n", state->rdi, state->rax);
     // }
 
     return 0;
 }
 
-unsigned long hook_arch_prctl(state_rtime_t* state) {
+unsigned long hook_arch_prctl(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     int code = (int)state->rdi;
     unsigned long addr = state->rsi;
 
@@ -60,12 +60,12 @@ unsigned long hook_arch_prctl(state_rtime_t* state) {
         
         case ARCH_SET_FS:
             memcpy(code_debug, "ARCH_SET_FS", strlen("ARCH_SET_FS\0"));
-            code = INSTRUMENTED_FS;
+            dbi_handler->instrumented_fs = addr;
             break;
-        
+    
         case ARCH_SET_GS:
             memcpy(code_debug, "ARCH_SET_GS", strlen("ARCH_SET_GS\0"));
-            code = INSTRUMENTED_GS;
+            dbi_handler->instrumented_gs = addr;
             break;
 
         case ARCH_MAP_VDSO_32:
@@ -86,24 +86,26 @@ unsigned long hook_arch_prctl(state_rtime_t* state) {
             break;
     }
 
-    state->rax = syscall(__NR_arch_prctl, code, addr);
+    // state->rax = syscall(__NR_arch_prctl, code, addr);
+    // we don't emulate the syscall
 
-    fprintf(stdout, "[ * ] arch_prctl(%s, %lx) = %lx\n", code_debug, addr, state->rax);
+    state->rax = 0x0;
+    fprintf(stdout, "[ =*= ] arch_prctl(%s, %lx) = 0\n", code_debug, addr); // I guess it works
 
     return 0;
 }
 
-unsigned long hook_access(state_rtime_t* state) {
+unsigned long hook_access(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     const char* filename = (const char* )state->rdi;
     int mode = state->rsi;
 
     state->rax = syscall(__NR_access, filename, mode);
-    fprintf(stdout, "[ * ] access(\"%s\", %x) = %lx\n", filename, mode, state->rax);
+    fprintf(stdout, "[ =*= ] access(\"%s\", %x) = %lx\n", filename, mode, state->rax);
 
     return 0;
 }
 
-unsigned long hook_mmap(state_rtime_t* state) {
+unsigned long hook_mmap(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     unsigned long addr = state->rdi;
     size_t length = state->rsi;
     int prot = state->rdx;
@@ -112,7 +114,14 @@ unsigned long hook_mmap(state_rtime_t* state) {
     int offt = state->r9;
 
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
-    fprintf(stdout, "[ * ] mmap(%lx, %lx, %x, %x, %x)\n", addr, length, prot, fd, offt);
+    fprintf(stdout, "[ =*= ] mmap(%lx, %lx, %x, %x, %x)\n", addr, length, prot, fd, offt);
+    
+    return 0;
+}
+
+unsigned long hook_writev(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+    state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
+    fprintf(stderr, "[ =*= ] writev(%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
     
     return 0;
 }
@@ -133,6 +142,9 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
 
     case __NR_mmap:
         return hook_mmap;
+
+    case __NR_writev:
+        return hook_writev;
 
     default:
         fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);

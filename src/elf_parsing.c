@@ -178,6 +178,9 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->curr_hook = NULL;
     s_binary->dbi_handler->state->null_entry = 0x0; // useless
 
+    s_binary->dbi_handler->instrumented_fs = INSTRUMENTED_FS;
+    s_binary->dbi_handler->instrumented_gs = INSTRUMENTED_GS;
+
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
         return (mdata_binary_t* )-1;

@@ -137,7 +137,7 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
     }
 
     // we set rip 
-    s_binary->dbi_handler->state->rip = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base);
+    s_binary->dbi_handler->state->rip = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0)); 
     
     // if there are arguments, we setup the stack
     if (arguments) {
@@ -204,7 +204,7 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     add_auxvt(AT_EXECFD, &iter[idx], &stack[idx], s_binary->fd);
     add_auxvt(AT_PHENT, &iter[idx], &stack[idx], s_binary->eh->e_phentsize);
     add_auxvt(AT_PHNUM, &iter[idx], &stack[idx], s_binary->eh->e_phnum);
-    add_auxvt(AT_BASE, &iter[idx], &stack[idx], (unsigned long)(s_binary->interp->base));
+    add_auxvt(AT_BASE, &iter[idx], &stack[idx], !s_binary->interp ? (unsigned long)s_binary->base : (unsigned long)(s_binary->interp->base));
     add_auxvt(AT_RANDOM, &iter[idx], &stack[idx], (unsigned long)&s_weeb);
     add_auxvt(AT_PHDR, &iter[idx], &stack[idx], (unsigned long)(s_binary->base + s_binary->eh->e_phoff));
     add_auxvt(AT_PLATFORM, &iter[idx], &stack[idx], (unsigned long)&s_arch);

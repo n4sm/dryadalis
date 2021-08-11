@@ -33,7 +33,7 @@
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0x50000
-#define DEBUG true
+#define DEBUG true 
 
 // eflags
 
@@ -62,7 +62,6 @@ typedef struct args_syscall_s {
 } args_syscall_t;
 
 typedef int (*u_callback_t) (void* s_binary);
-typedef unsigned long (*hook_syscall) (args_syscall_t* arguments);
 
 typedef struct hashmap_s {
     unsigned long** value;
@@ -145,6 +144,8 @@ typedef struct dbi_instr_s {
     unsigned long* curr_hook;
     unsigned long *host_rsp;
     hashmap_t* hashmap;
+    unsigned long instrumented_fs;
+    unsigned long instrumented_gs;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
@@ -168,6 +169,8 @@ typedef struct mdata_binary_s {
     unsigned long dispatcher;
     dbi_instr_t* dbi_handler;
 } mdata_binary_t;
+
+typedef unsigned long (*hook_syscall) (state_rtime_t* state, dbi_instr_t* dbi_handler);
 
 // macro
 
@@ -282,6 +285,6 @@ _Bool is_of(unsigned long eflags);
 
 // syscall_hook
 
-
+hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary);
 
 #endif

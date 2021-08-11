@@ -88,7 +88,7 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     int n = 0;
 
     if (!is_mapped(addr + size-1, s_binary)) {
-        fprintf(stderr, "FATAL addr + size is not mapped\n");
+        fprintf(stderr, "FATAL addr + size (%lx + %x) is not mapped\n", addr, size-1);
         return -1;
     }
 
@@ -464,11 +464,15 @@ int host_save_state(state_rtime_t* state) {
 
 // main instrumentation abstraction
 int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
-    unsigned long entry = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + s_binary->base);
+    unsigned long entry = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
     s_binary->dbi_handler->curr_hook = calloc(1, sizeof(unsigned long));
     s_binary->dbi_handler->host_rsp = (unsigned long* )((map_stack()));
     s_binary->dispatcher = (unsigned long)_dispatcher;
 
+    if (DEBUG) {
+        fprintf(stdout, "e_entry: %lx\n", entry);
+    }
+    
     if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
         return -1;
     }
@@ -507,7 +511,7 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     //host_save_state(s_binary->dbi_handler->host_state);
     if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {
         exit(-1);
-    } else if (-1 == set_fs_gs((void* )INSTRUMENTED_FS, (void* )INSTRUMENTED_GS)) {
+    } else if (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
         exit(-1);
     }
     exec_binary(s_binary);
@@ -626,6 +630,7 @@ void _dispatcher(mdata_binary_t* s_binary) {
 
     s_binary->dbi_handler->state->rip = target;
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
+    fflush(stdout);
     continue_exec(s_binary);
 }
 //== internal functions used by eval_target
@@ -813,9 +818,9 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
             hook_syscall sys_callback = NULL;
             unsigned long ret = 0x0;
             size_t sz = insn->size;
-            
+
             if (-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
-                if ((ret = sys_callback(s_binary->dbi_handler->state))) {
+                if ((ret = sys_callback(s_binary->dbi_handler->state, s_binary->dbi_handler))) {
                     // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
                     cs_free(insn, count);
                     return ret;
@@ -837,7 +842,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 // =-=-=-=-
 
 void continue_exec(mdata_binary_t* s_binary) {
-    if (-1 == set_fs_gs((void* )INSTRUMENTED_FS, (void* )INSTRUMENTED_GS)) {
+    if (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
         fprintf(stderr, "FATAL arch_prctl\n");
     }
 
