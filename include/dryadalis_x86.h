@@ -13,6 +13,7 @@
 #include <asm/ldt.h>   
 #include <asm/prctl.h>
 #include <sys/prctl.h>
+#include <immintrin.h>
 
 #include "kernel_list.h"
 
@@ -29,7 +30,7 @@
 #define STUB_ADDR_DUMP 0xff1d000
 #define STUB_ADDR_RESTORE 0xdf1d000
 
-#define INSTRUMENTED_FS 0x14f000
+#define INSTRUMENTED_FS 0x14f0000
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0x50000
@@ -67,6 +68,8 @@ typedef struct hashmap_s {
     unsigned long** value;
 } hashmap_t;
 
+_Bool must_change;
+
 /* Registers on entry:
  * rax  system call number
  * rcx  return address
@@ -81,6 +84,110 @@ typedef struct hashmap_s {
  *
  * Only called from user space.
 */
+
+typedef struct sse_s {
+    __m128i xmm0 __attribute__((packed, aligned(16)));
+    __m128i xmm1 __attribute__((packed, aligned(16)));
+    __m128i xmm2 __attribute__((packed, aligned(16)));
+    __m128i xmm3 __attribute__((packed, aligned(16)));
+    __m128i xmm4 __attribute__((packed, aligned(16)));
+    __m128i xmm5 __attribute__((packed, aligned(16)));
+    __m128i xmm6 __attribute__((packed, aligned(16)));
+    __m128i xmm7 __attribute__((packed, aligned(16)));
+    __m128i xmm8 __attribute__((packed, aligned(16)));
+    __m128i xmm9 __attribute__((packed, aligned(16)));
+    __m128i xmm10 __attribute__((packed, aligned(16)));
+    __m128i xmm11 __attribute__((packed, aligned(16)));
+    __m128i xmm12 __attribute__((packed, aligned(16)));
+    __m128i xmm13 __attribute__((packed, aligned(16)));
+    __m128i xmm14 __attribute__((packed, aligned(16)));
+    __m128i xmm15 __attribute__((packed, aligned(16)));
+    __m128i xmm16 __attribute__((packed, aligned(16)));
+    __m128i xmm17 __attribute__((packed, aligned(16)));
+    __m128i xmm18 __attribute__((packed, aligned(16)));
+    __m128i xmm19 __attribute__((packed, aligned(16)));
+    __m128i xmm20 __attribute__((packed, aligned(16)));
+    __m128i xmm21 __attribute__((packed, aligned(16)));
+    __m128i xmm22 __attribute__((packed, aligned(16)));
+    __m128i xmm23 __attribute__((packed, aligned(16)));
+    __m128i xmm24 __attribute__((packed, aligned(16)));
+    __m128i xmm25 __attribute__((packed, aligned(16)));
+    __m128i xmm26 __attribute__((packed, aligned(16)));
+    __m128i xmm27 __attribute__((packed, aligned(16)));
+    __m128i xmm28 __attribute__((packed, aligned(16)));
+    __m128i xmm29 __attribute__((packed, aligned(16)));
+    __m128i xmm30 __attribute__((packed, aligned(16)));
+    __m128i xmm31 __attribute__((packed, aligned(16)));
+} __attribute__((packed, aligned(16))) sse_t;
+
+typedef struct avx2_s {
+    __m256i ymm0;
+    __m256i ymm1;
+    __m256i ymm2;
+    __m256i ymm3;
+    __m256i ymm4;
+    __m256i ymm5;
+    __m256i ymm6;
+    __m256i ymm7;
+    __m256i ymm8;
+    __m256i ymm9;
+    __m256i ymm10;
+    __m256i ymm11;
+    __m256i ymm12;
+    __m256i ymm13;
+    __m256i ymm14;
+    __m256i ymm15;
+    __m256i ymm16;
+    __m256i ymm17;
+    __m256i ymm18;
+    __m256i ymm19;
+    __m256i ymm20;
+    __m256i ymm21;
+    __m256i ymm22;
+    __m256i ymm23;
+    __m256i ymm24;
+    __m256i ymm25;
+    __m256i ymm26;
+    __m256i ymm27;
+    __m256i ymm28;
+    __m256i ymm29;
+    __m256i ymm30;
+    __m256i ymm31;
+} avx2_t;
+
+typedef struct avx512_s {
+    __m512i zmm0;
+    __m512i zmm2;
+    __m512i zmm3;
+    __m512i zmm4;
+    __m512i zmm5;
+    __m512i zmm6;
+    __m512i zmm7;
+    __m512i zmm8;
+    __m512i zmm9;
+    __m512i zmm10;
+    __m512i zmm11;
+    __m512i zmm12;
+    __m512i zmm13;
+    __m512i zmm14;
+    __m512i zmm15;
+    __m512i zmm16;
+    __m512i zmm17;
+    __m512i zmm18;
+    __m512i zmm19;
+    __m512i zmm20;
+    __m512i zmm21;
+    __m512i zmm22;
+    __m512i zmm23;
+    __m512i zmm24;
+    __m512i zmm25;
+    __m512i zmm26;
+    __m512i zmm27;
+    __m512i zmm28;
+    __m512i zmm29;
+    __m512i zmm30;
+    __m512i zmm31;
+} avx512_t;
 
 typedef struct state_rtime_s {
     unsigned long rax;
@@ -109,6 +216,10 @@ typedef struct state_rtime_s {
     unsigned long r13;
     unsigned long r14;
     unsigned long r15;
+
+    sse_t* sse;
+    avx2_t* avx2;
+    avx512_t* avx512;
 
     unsigned long null_entry;
 } state_rtime_t;
