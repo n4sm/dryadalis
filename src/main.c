@@ -8,14 +8,15 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <immintrin.h>
 
 #include "../include/dryadalis_x86.h"
 
 int insn_count;
 
 int test(void* s_binary) {
-    unsigned long rip = ((mdata_binary_t* )s_binary)->dbi_handler->state->rip;
-    // fprintf(stdout, "rip: %lx, ", rip);
+    // unsigned xmm0 = *(unsigned long* )(&(((mdata_binary_t* )s_binary)->dbi_handler->state->sse->xmm0));
+    // fprintf(stdout, "xmm0: %lx, ", (xmm0));
     insn_count += 1;
     fprintf(stdout, "bbl_count: 0x%x\n", insn_count);
     return 0;

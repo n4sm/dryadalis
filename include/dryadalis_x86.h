@@ -63,6 +63,7 @@ typedef struct args_syscall_s {
 } args_syscall_t;
 
 typedef int (*u_callback_t) (void* s_binary);
+typedef void (*destructor_t) (void);
 
 typedef struct hashmap_s {
     unsigned long** value;
@@ -102,58 +103,26 @@ typedef struct sse_s {
     __m128i xmm13 __attribute__((packed, aligned(16)));
     __m128i xmm14 __attribute__((packed, aligned(16)));
     __m128i xmm15 __attribute__((packed, aligned(16)));
-    __m128i xmm16 __attribute__((packed, aligned(16)));
-    __m128i xmm17 __attribute__((packed, aligned(16)));
-    __m128i xmm18 __attribute__((packed, aligned(16)));
-    __m128i xmm19 __attribute__((packed, aligned(16)));
-    __m128i xmm20 __attribute__((packed, aligned(16)));
-    __m128i xmm21 __attribute__((packed, aligned(16)));
-    __m128i xmm22 __attribute__((packed, aligned(16)));
-    __m128i xmm23 __attribute__((packed, aligned(16)));
-    __m128i xmm24 __attribute__((packed, aligned(16)));
-    __m128i xmm25 __attribute__((packed, aligned(16)));
-    __m128i xmm26 __attribute__((packed, aligned(16)));
-    __m128i xmm27 __attribute__((packed, aligned(16)));
-    __m128i xmm28 __attribute__((packed, aligned(16)));
-    __m128i xmm29 __attribute__((packed, aligned(16)));
-    __m128i xmm30 __attribute__((packed, aligned(16)));
-    __m128i xmm31 __attribute__((packed, aligned(16)));
 } __attribute__((packed, aligned(16))) sse_t;
 
 typedef struct avx2_s {
-    __m256i ymm0;
-    __m256i ymm1;
-    __m256i ymm2;
-    __m256i ymm3;
-    __m256i ymm4;
-    __m256i ymm5;
-    __m256i ymm6;
-    __m256i ymm7;
-    __m256i ymm8;
-    __m256i ymm9;
-    __m256i ymm10;
-    __m256i ymm11;
-    __m256i ymm12;
-    __m256i ymm13;
-    __m256i ymm14;
-    __m256i ymm15;
-    __m256i ymm16;
-    __m256i ymm17;
-    __m256i ymm18;
-    __m256i ymm19;
-    __m256i ymm20;
-    __m256i ymm21;
-    __m256i ymm22;
-    __m256i ymm23;
-    __m256i ymm24;
-    __m256i ymm25;
-    __m256i ymm26;
-    __m256i ymm27;
-    __m256i ymm28;
-    __m256i ymm29;
-    __m256i ymm30;
-    __m256i ymm31;
-} avx2_t;
+    __m128i ymm0 __attribute__((packed, aligned(32)));
+    __m128i ymm1 __attribute__((packed, aligned(32)));
+    __m128i ymm2 __attribute__((packed, aligned(32)));
+    __m128i ymm3 __attribute__((packed, aligned(32)));
+    __m128i ymm4 __attribute__((packed, aligned(32)));
+    __m128i ymm5 __attribute__((packed, aligned(32)));
+    __m128i ymm6 __attribute__((packed, aligned(32)));
+    __m128i ymm7 __attribute__((packed, aligned(32)));
+    __m128i ymm8 __attribute__((packed, aligned(32)));
+    __m128i ymm9 __attribute__((packed, aligned(32)));
+    __m128i ymm10 __attribute__((packed, aligned(32)));
+    __m128i ymm11 __attribute__((packed, aligned(32)));
+    __m128i ymm12 __attribute__((packed, aligned(32)));
+    __m128i ymm13 __attribute__((packed, aligned(32)));
+    __m128i ymm14 __attribute__((packed, aligned(32)));
+    __m128i ymm15 __attribute__((packed, aligned(32)));
+} __attribute__((packed, aligned(32))) avx2_t;
 
 typedef struct avx512_s {
     __m512i zmm0;
@@ -243,6 +212,7 @@ typedef struct dbi_instr_s {
     u_callback_t u_handler;
     hook_t* dump;
     hook_t* restore;
+    destructor_t dtor;
     // unsigned char* orig_bytes;
     // ssize_t length_trampoline;
     // unsigned char* trampoline;
@@ -370,6 +340,9 @@ int arch_prctl(int func, void *ptr);
 int set_fs_gs(void* fs, void* gs);
 _Bool is_set(mdata_binary_t* s_binary, int flag);
 _Bool is_jmp_taken(int id, mdata_binary_t* s_binary);
+
+void default_dtor(void);
+int set_fs_gs(void* fs, void* gs);
 
 // state_runt
 

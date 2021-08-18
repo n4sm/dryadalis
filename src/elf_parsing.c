@@ -131,6 +131,7 @@ int free_binary(mdata_binary_t *bi) {
 mdata_binary_t* init_analysis(const char *s) {
     struct stat st;
 
+    __builtin_cpu_init();
     mdata_binary_t *s_binary = alloc_binary();
 
     if ((s_binary->fd = open(s, O_RDONLY)) == -1) {
@@ -148,7 +149,21 @@ mdata_binary_t* init_analysis(const char *s) {
     read(s_binary->fd, s_binary->fbinary, s_binary->len_file);
 
     s_binary->dbi_handler = calloc(1, sizeof(dbi_instr_t));
+
     s_binary->dbi_handler->state = calloc(1, sizeof(state_rtime_t));
+
+    // useless init
+    s_binary->dbi_handler->state->avx2 = NULL;
+    s_binary->dbi_handler->state->avx512 = NULL;
+    s_binary->dbi_handler->state->sse = NULL;
+    if (__builtin_cpu_supports("sse") && !__builtin_cpu_supports("avx2")) {
+        s_binary->dbi_handler->state->sse = calloc(1, sizeof(sse_t));
+    } else if (__builtin_cpu_supports("avx2") && !__builtin_cpu_supports("avx512f")) {
+        s_binary->dbi_handler->state->avx2 = calloc(1, sizeof(avx2_t));
+    } else if (__builtin_cpu_supports("avx512f")) {
+        s_binary->dbi_handler->state->avx512 = calloc(1, sizeof(avx512_t));
+    }
+
     s_binary->dbi_handler->host_state = calloc(1, sizeof(state_rtime_t));
     s_binary->dbi_handler->hashmap = calloc(1, sizeof(hashmap_t));
     s_binary->dbi_handler->hashmap = init_hashmap(s_binary->dbi_handler->hashmap, s_binary);
@@ -178,8 +193,9 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->curr_hook = NULL;
     s_binary->dbi_handler->state->null_entry = 0x0; // useless
 
-    s_binary->dbi_handler->instrumented_fs = INSTRUMENTED_FS;
-    s_binary->dbi_handler->instrumented_gs = INSTRUMENTED_GS;
+    s_binary->dbi_handler->instrumented_fs = 0;
+    s_binary->dbi_handler->instrumented_gs = 0;
+    s_binary->dbi_handler->dtor = default_dtor;
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -200,6 +216,18 @@ mdata_binary_t* init_analysis(const char *s) {
 
 int end_analysis(mdata_binary_t *s_binary) {
     if (s_binary->dbi_handler->state) {
+        if (s_binary->dbi_handler->state->sse) {
+            free(s_binary->dbi_handler->state->sse);
+        }
+
+        if (s_binary->dbi_handler->state->avx2) {
+            free(s_binary->dbi_handler->state->avx2);
+        }
+
+        if (s_binary->dbi_handler->state->avx512) {
+            free(s_binary->dbi_handler->state->avx512);
+        }
+        
         free(s_binary->dbi_handler->state);
     }
 

@@ -169,6 +169,36 @@ _Bool is_64bits(int reg) {
                              || (reg == X86_REG_R14) || (reg == X86_REG_R15) || (reg == X86_REG_EFLAGS) || (reg == X86_REG_RIP);
 }
 
+_Bool is_128bits(int reg) {
+    return (reg == X86_REG_XMM0) || (reg == X86_REG_XMM1) || (reg == X86_REG_XMM2) || (reg == X86_REG_XMM3) || (reg == X86_REG_XMM4) ||
+            (reg == X86_REG_XMM5) || (reg == X86_REG_XMM6) || (reg == X86_REG_XMM7) || (reg == X86_REG_XMM8) || (reg == X86_REG_XMM9) || 
+            (reg == X86_REG_XMM10) || (reg == X86_REG_XMM11) || (reg == X86_REG_XMM12) || (reg == X86_REG_XMM13) || (reg == X86_REG_XMM14) ||
+            (reg == X86_REG_XMM15) || (reg == X86_REG_XMM16) || (reg == X86_REG_XMM17) || (reg == X86_REG_XMM18) || (reg == X86_REG_XMM19) ||
+            (reg == X86_REG_XMM20) || (reg == X86_REG_XMM21) || (reg == X86_REG_XMM22) || (reg == X86_REG_XMM23) || (reg == X86_REG_XMM24) ||
+            (reg == X86_REG_XMM25) || (reg == X86_REG_XMM26) || (reg == X86_REG_XMM27) || (reg == X86_REG_XMM28) || (reg == X86_REG_XMM29) ||
+            (reg == X86_REG_XMM30) || (reg == X86_REG_XMM31);
+}
+
+_Bool is_256bits(int reg) {
+    return (reg == X86_REG_YMM0) || (reg == X86_REG_YMM1) || (reg == X86_REG_YMM2) || (reg == X86_REG_YMM3) || (reg == X86_REG_YMM4) ||
+            (reg == X86_REG_YMM5) || (reg == X86_REG_YMM6) || (reg == X86_REG_YMM7) || (reg == X86_REG_YMM8) || (reg == X86_REG_YMM9) || 
+            (reg == X86_REG_YMM10) || (reg == X86_REG_YMM11) || (reg == X86_REG_YMM12) || (reg == X86_REG_YMM13) || (reg == X86_REG_YMM14) ||
+            (reg == X86_REG_YMM15) || (reg == X86_REG_YMM16) || (reg == X86_REG_YMM17) || (reg == X86_REG_YMM18) || (reg == X86_REG_YMM19) ||
+            (reg == X86_REG_YMM20) || (reg == X86_REG_YMM21) || (reg == X86_REG_YMM22) || (reg == X86_REG_YMM23) || (reg == X86_REG_YMM24) ||
+            (reg == X86_REG_YMM25) || (reg == X86_REG_YMM26) || (reg == X86_REG_YMM27) || (reg == X86_REG_YMM28) || (reg == X86_REG_YMM29) ||
+            (reg == X86_REG_YMM30) || (reg == X86_REG_YMM31);
+}
+
+_Bool is_512bits(int reg) {
+    return (reg == X86_REG_ZMM0) || (reg == X86_REG_ZMM1) || (reg == X86_REG_ZMM2) || (reg == X86_REG_ZMM3) || (reg == X86_REG_ZMM4) ||
+            (reg == X86_REG_ZMM5) || (reg == X86_REG_ZMM6) || (reg == X86_REG_ZMM7) || (reg == X86_REG_ZMM8) || (reg == X86_REG_ZMM9) || 
+            (reg == X86_REG_ZMM10) || (reg == X86_REG_ZMM11) || (reg == X86_REG_ZMM12) || (reg == X86_REG_ZMM13) || (reg == X86_REG_ZMM14) ||
+            (reg == X86_REG_ZMM15) || (reg == X86_REG_ZMM16) || (reg == X86_REG_ZMM17) || (reg == X86_REG_ZMM18) || (reg == X86_REG_ZMM19) ||
+            (reg == X86_REG_ZMM20) || (reg == X86_REG_ZMM21) || (reg == X86_REG_ZMM22) || (reg == X86_REG_ZMM23) || (reg == X86_REG_ZMM24) ||
+            (reg == X86_REG_ZMM25) || (reg == X86_REG_ZMM26) || (reg == X86_REG_ZMM27) || (reg == X86_REG_ZMM28) || (reg == X86_REG_ZMM29) ||
+            (reg == X86_REG_ZMM30) || (reg == X86_REG_ZMM31);
+}
+
 unsigned long read_reg(int key, hashmap_t* hashmap) {
     if (is_8bits_right(key)) {
         return (*(hashmap->value[key]) & 0xff);

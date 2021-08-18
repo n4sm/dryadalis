@@ -438,6 +438,7 @@ void exec_binary(mdata_binary_t* s_binary) {
         "xor %%r14, %%r14\n"
         "xor %%r15, %%r15\n"
         "xor %%rbp, %%rbp\n"
+        "xorps %%xmm0, %%xmm0\n"
         "push %%rax\n"
         "xor %%rax, %%rax\n"
         "ret\n"

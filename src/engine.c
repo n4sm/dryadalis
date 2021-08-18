@@ -42,6 +42,11 @@ int arch_prctl(int func, void *ptr) {
     return syscall(__NR_arch_prctl, func, ptr);
 }
 
+void default_dtor(void) {
+    fprintf(stdout, "End of the program !\n");
+    exit(0);
+}
+
 // =-=-=-=-=--
 
 // check if an instruction will change the control flow
@@ -87,8 +92,8 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     size_t size = PAGE_SZ;
     int n = 0;
 
-    if (!is_mapped(addr + size-1, s_binary)) {
-        fprintf(stderr, "FATAL addr + size (%lx + %x) is not mapped\n", addr, size-1);
+    if (!is_mapped(addr + size, s_binary)) {
+        fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
         return -1;
     }
 
@@ -271,7 +276,7 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
     size_t count;
     unsigned char *encode = mmap((void* )STUB_ADDR_DUMP, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     size_t size;
-    char insns[3000] = {0};
+    char insns[10000] = {0};
 
     if (MAP_FAILED == encode) {
         return -1;
@@ -315,22 +320,116 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                              mov rax, r14;\
                              movabs [%p], rax; \
                              mov rax, r15;\
-                             movabs [%p], rax; \
-                             mov rdi, 0x%lx; \
-                             mov rax, 0x%lx; \
-                             push 0x0;\
-                             push rax;\
-                             movabs rax, [%p];\
-                             movabs [%p], rax;\
-                             ret", &(s_binary->dbi_handler->state->rsp), (unsigned long)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
+                             movabs [%p], rax;", &(s_binary->dbi_handler->state->rsp), (unsigned long)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
                                                            &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
                                                            &(s_binary->dbi_handler->state->rbp), \
                                                            &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
                                                            &(s_binary->dbi_handler->state->fs), &(s_binary->dbi_handler->state->cs), &(s_binary->dbi_handler->state->ss), \
                                                            &(s_binary->dbi_handler->state->ds), &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), \
                                                            &(s_binary->dbi_handler->state->r10), &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), \
-                                                           &(s_binary->dbi_handler->state->r13), &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15), \
-                                                           (unsigned long)s_binary, (unsigned long)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
+                                                           &(s_binary->dbi_handler->state->r13), &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
+
+    if (s_binary->dbi_handler->state->sse) {
+        sprintf(insns + strlen(insns), "    mov rax, %p;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm1;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm2;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm3;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm4;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm5;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm6;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm7;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm8;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm9;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm10;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm11;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm12;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm13;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm14;\
+                                            movaps [rax], xmm0;\
+                                            mov rax, %p;\
+                                            movaps xmm0, xmm15;\
+                                            movaps [rax], xmm0;",      &(s_binary->dbi_handler->state->sse->xmm0), &(s_binary->dbi_handler->state->sse->xmm1), &(s_binary->dbi_handler->state->sse->xmm2),\
+                                                                        &(s_binary->dbi_handler->state->sse->xmm3), &(s_binary->dbi_handler->state->sse->xmm4), &(s_binary->dbi_handler->state->sse->xmm5), \
+                                                                        &(s_binary->dbi_handler->state->sse->xmm6), &(s_binary->dbi_handler->state->sse->xmm7), &(s_binary->dbi_handler->state->sse->xmm8), \
+                                                                        &(s_binary->dbi_handler->state->sse->xmm9), &(s_binary->dbi_handler->state->sse->xmm10), &(s_binary->dbi_handler->state->sse->xmm11), \
+                                                                        &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
+    } else if (s_binary->dbi_handler->state->avx2) {
+        sprintf(insns + strlen(insns), "    mov rax, %p;\
+                                            vmovaps [rax], ymm0;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm1;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm2;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm3;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm4;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm5;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm6;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm7;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], ymm8;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm9;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm10;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm11;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm12;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm13;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm14;\
+                                            mov rax, %p;\
+                                            vmovaps [rax], xmm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                                                        &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
+                                                                        &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
+                                                                        &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
+                                                                        &(s_binary->dbi_handler->state->avx2->ymm12), &(s_binary->dbi_handler->state->avx2->ymm13), &(s_binary->dbi_handler->state->avx2->ymm14), &(s_binary->dbi_handler->state->avx2->ymm15));
+    } else if (s_binary->dbi_handler->state->avx512) {
+        fprintf(stderr, "FATAL avx512 isn't supported for now\n");
+        return -1;
+    }
+
+    sprintf(insns + strlen(insns), "mov rdi, 0x%lx; \
+                                    mov rax, 0x%lx; \
+                                    push 0x0;\
+                                    push rax;\
+                                    movabs rax, [%p];\
+                                    movabs [%p], rax;\
+                                    ret", (unsigned long)s_binary, (unsigned long)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -355,7 +454,7 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
     size_t count;
     unsigned char *encode = mmap((void* )STUB_ADDR_RESTORE, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     size_t size;
-    char insns[25000] = {0};
+    char insns[10000] = {0};
 
     if (MAP_FAILED == encode) {
         return -1;
@@ -395,22 +494,102 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
                                 movabs rax, [%p]; \
                                 mov r14, rax; \
                                 movabs rax, [%p]; \
-                                mov r15, rax; \
-                    movabs rax, [%p]; push rax; \
-                    movabs rax, [%p]; push rax; \
-                                popfq; \
-                                pop rsp; \
-                                movabs rax, [%p]; \
-                                push rax;\
-                                movabs rax, [%p];\
-                                ret;", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
+                                mov r15, rax;", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
                                                             &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
                                                             &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), &(s_binary->dbi_handler->state->fs), \
                                                             &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
                                                             &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
                                                             &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
-                                                            &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15), &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
-                                                            &(s_binary->dbi_handler->state->rip), &s_binary->dbi_handler->state->rax);
+                                                            &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
+
+    if (s_binary->dbi_handler->state->sse) {
+        sprintf(insns + strlen(insns),     "mov rax, %p;\
+                                            movaps xmm0, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm1, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm2, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm3, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm4, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm5, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm6, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm7, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm8, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm9, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm10, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm11, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm12, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm13, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm14, [rax];\
+                                            mov rax, %p;\
+                                            movaps xmm15, [rax];",  &(s_binary->dbi_handler->state->sse->xmm0), &(s_binary->dbi_handler->state->sse->xmm1), &(s_binary->dbi_handler->state->sse->xmm2),\
+                                                                    &(s_binary->dbi_handler->state->sse->xmm3), &(s_binary->dbi_handler->state->sse->xmm4), &(s_binary->dbi_handler->state->sse->xmm5), \
+                                                                    &(s_binary->dbi_handler->state->sse->xmm6), &(s_binary->dbi_handler->state->sse->xmm7), &(s_binary->dbi_handler->state->sse->xmm8), \
+                                                                    &(s_binary->dbi_handler->state->sse->xmm9), &(s_binary->dbi_handler->state->sse->xmm10), &(s_binary->dbi_handler->state->sse->xmm11), \
+                                                                    &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
+    } else if (s_binary->dbi_handler->state->avx2) {
+        sprintf(insns + strlen(insns),     "mov rax, %p;\
+                                            vmovaps ymm0, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm1, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm2, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm3, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm4, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm5, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm6, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm7, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm8, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm9, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm10, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm11, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm12, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm13, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm14, [rax];\
+                                            mov rax, %p;\
+                                            vmovaps ymm15, [rax];",  &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                                                     &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
+                                                                     &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
+                                                                     &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
+                                                                     &(s_binary->dbi_handler->state->avx2->ymm12), &(s_binary->dbi_handler->state->avx2->ymm13), &(s_binary->dbi_handler->state->avx2->ymm14), &(s_binary->dbi_handler->state->avx2->ymm15));
+    } else if (s_binary->dbi_handler->state->avx512) {
+        fprintf(stderr, "FATAL avx512 isn't supported for now\n");
+        return -1;
+    }
+
+    sprintf(insns + strlen(insns), "movabs rax, [%p]; push rax; \
+                                    movabs rax, [%p]; push rax; \
+                                                popfq; \
+                                                pop rsp; \
+                                                movabs rax, [%p]; \
+                                                push rax;\
+                                                movabs rax, [%p];\
+                                                ret;",  &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
+                                                        &(s_binary->dbi_handler->state->rip), &s_binary->dbi_handler->state->rax);
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -511,7 +690,7 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     //host_save_state(s_binary->dbi_handler->host_state);
     if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {
         exit(-1);
-    } else if (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
+    } else if (s_binary->dbi_handler->instrumented_fs && (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs))) {
         exit(-1);
     }
     exec_binary(s_binary);
@@ -842,7 +1021,8 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 // =-=-=-=-
 
 void continue_exec(mdata_binary_t* s_binary) {
-    if (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
+    fprintf(stdout, "fs = %lx\n", s_binary->dbi_handler->instrumented_fs);
+    if (s_binary->dbi_handler->instrumented_fs && (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs))) {
         fprintf(stderr, "FATAL arch_prctl\n");
     }
 

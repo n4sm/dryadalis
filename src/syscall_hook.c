@@ -61,6 +61,7 @@ unsigned long hook_arch_prctl(state_rtime_t* state, dbi_instr_t* dbi_handler) {
         case ARCH_SET_FS:
             memcpy(code_debug, "ARCH_SET_FS", strlen("ARCH_SET_FS\0"));
             dbi_handler->instrumented_fs = addr;
+            must_change = true;
             break;
     
         case ARCH_SET_GS:
@@ -89,8 +90,17 @@ unsigned long hook_arch_prctl(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     // state->rax = syscall(__NR_arch_prctl, code, addr);
     // we don't emulate the syscall
 
-    state->rax = 0x0;
-    fprintf(stdout, "[ =*= ] arch_prctl(%s, %lx) = 0\n", code_debug, addr); // I guess it works
+    unsigned long try_ret = syscall(__NR_arch_prctl, code, addr);
+
+    if (code == ARCH_SET_FS) {
+        if (-1 == set_fs_gs((void* )dbi_handler->host_state->fs, (void* )dbi_handler->host_state->gs)) {
+            fprintf(stderr, "FATAL set_fs_gs\n");
+            exit(-1);
+        }
+    }
+
+    state->rax = try_ret;
+    fprintf(stdout, "[ =*= ] arch_prctl(%s, %lx) = %lx\n", code_debug, addr, try_ret); // I guess it works
 
     return 0;
 }
@@ -115,7 +125,7 @@ unsigned long hook_mmap(state_rtime_t* state, dbi_instr_t* dbi_handler) {
 
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     fprintf(stdout, "[ =*= ] mmap(%lx, %lx, %x, %x, %x)\n", addr, length, prot, fd, offt);
-    
+
     return 0;
 }
 
@@ -123,6 +133,22 @@ unsigned long hook_writev(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
     fprintf(stderr, "[ =*= ] writev(%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
     
+    return 0;
+}
+
+unsigned long hook_exit(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+    // state->rax = syscall(__NR_exit, state->rdi);
+    fprintf(stderr, "[ =*= ] exit(%lx)\n", state->rdi);
+    dbi_handler->dtor();
+    
+    return 0;
+}
+
+unsigned long hook_exit_grp(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+    // state->rax = syscall(__NR_exit_group, state->rdi);
+    fprintf(stderr, "[ =*= ] exit_grp(%lx)\n", state->rdi);
+    dbi_handler->dtor();
+
     return 0;
 }
 
@@ -145,6 +171,12 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
 
     case __NR_writev:
         return hook_writev;
+
+    case __NR_exit:
+        return hook_exit;
+
+    case __NR_exit_group:
+        return hook_exit_grp;
 
     default:
         fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
