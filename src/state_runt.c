@@ -214,3 +214,136 @@ unsigned long read_reg(int key, hashmap_t* hashmap) {
 
     return -1;
 }
+
+void prnt_large(unsigned char* integer, int count) {
+    int64_t *iter = calloc(1, count *  sizeof(int64_t));
+    memcpy(iter, integer, count *  sizeof(int64_t));
+
+    fprintf(stdout, "{");
+
+    for (size_t i = 0; i < count; i++) {
+        if (i != 0) {
+            fprintf(stdout, ", ");
+        }
+
+        fprintf(stdout, "%016lx", iter[i]);
+    }
+
+    fprintf(stdout, "}");
+    
+}
+
+void prnt_uint128(__m128i integer) {
+    prnt_large((unsigned char* )&integer, sizeof(integer) / sizeof(int64_t));
+}
+
+void prnt_uint256(__m256i integer) {
+    prnt_large((unsigned char* )&integer, sizeof(integer) / sizeof(int64_t));
+}
+
+void log_sse(state_rtime_t* state) {
+    fprintf(stdout, "$xmm0\t ");
+    prnt_uint128(state->sse->xmm0);
+    fprintf(stdout, "\n$xmm1\t ");
+    prnt_uint128(state->sse->xmm1);
+    fprintf(stdout, "\n$xmm2\t ");
+    prnt_uint128(state->sse->xmm2);
+    fprintf(stdout, "\n$xmm3\t ");
+    prnt_uint128(state->sse->xmm3);
+    fprintf(stdout, "\n$xmm4\t ");
+    prnt_uint128(state->sse->xmm4);
+    fprintf(stdout, "\n$xmm5\t ");
+    prnt_uint128(state->sse->xmm5);
+    fprintf(stdout, "\n$xmm6\t ");
+    prnt_uint128(state->sse->xmm6);
+    fprintf(stdout, "\n$xmm7\t ");
+    prnt_uint128(state->sse->xmm7);
+    fprintf(stdout, "\n$xmm8\t ");
+    prnt_uint128(state->sse->xmm8);
+    fprintf(stdout, "\n$xmm9\t ");
+    prnt_uint128(state->sse->xmm9);
+    fprintf(stdout, "\n$xmm10\t ");
+    prnt_uint128(state->sse->xmm10);
+    fprintf(stdout, "\n$xmm11\t ");
+    prnt_uint128(state->sse->xmm11);
+    fprintf(stdout, "\n$xmm12\t ");
+    prnt_uint128(state->sse->xmm12);
+    fprintf(stdout, "\n$xmm13\t ");
+    prnt_uint128(state->sse->xmm13);
+    fprintf(stdout, "\n$xmm14\t ");
+    prnt_uint128(state->sse->xmm14);
+    fprintf(stdout, "\n$xmm15\t");
+    prnt_uint128(state->sse->xmm15);
+}
+
+void log_avx2(state_rtime_t* state) {
+    fprintf(stdout, "\n$ymm0\t ");
+    prnt_uint256(state->avx2->ymm0);
+    fprintf(stdout, "\n$ymm1\t ");
+    prnt_uint256(state->avx2->ymm1);
+    fprintf(stdout, "\n$ymm2\t ");
+    prnt_uint256(state->avx2->ymm2);
+    fprintf(stdout, "\n$ymm3\t ");
+    prnt_uint256(state->avx2->ymm3);
+    fprintf(stdout, "\n$ymm4\t ");
+    prnt_uint256(state->avx2->ymm4);
+    fprintf(stdout, "\n$ymm5\t ");
+    prnt_uint256(state->avx2->ymm5);
+    fprintf(stdout, "\n$ymm6\t ");
+    prnt_uint256(state->avx2->ymm6);
+    fprintf(stdout, "\n$ymm7\t ");
+    prnt_uint256(state->avx2->ymm7);
+    fprintf(stdout, "\n$ymm8\t ");
+    prnt_uint256(state->avx2->ymm8);
+    fprintf(stdout, "\n$ymm9\t ");
+    prnt_uint256(state->avx2->ymm9);
+    fprintf(stdout, "\n$ymm10\t ");
+    prnt_uint256(state->avx2->ymm10);
+    fprintf(stdout, "\n$ymm11\t ");
+    prnt_uint256(state->avx2->ymm11);
+    fprintf(stdout, "\n$ymm12\t ");
+    prnt_uint256(state->avx2->ymm12);
+    fprintf(stdout, "\n$ymm13\t ");
+    prnt_uint256(state->avx2->ymm13);
+    fprintf(stdout, "\n$ymm14\t ");
+    prnt_uint256(state->avx2->ymm14);
+    fprintf(stdout, "\n$ymm15\t ");
+    prnt_uint256(state->avx2->ymm15);
+    fprintf(stdout, "\n");
+}
+
+void log_general(state_rtime_t* state) {
+    fprintf(stdout, "$rax\t {%lx}\n", state->rax);
+    fprintf(stdout, "$rbx\t {%lx}\n", state->rbx);
+    fprintf(stdout, "$rcx\t {%lx}\n", state->rcx);
+    fprintf(stdout, "$rdx\t {%lx}\n", state->rdx);
+    fprintf(stdout, "$rsi\t {%lx}\n", state->rsi);
+    fprintf(stdout, "$rdi\t {%lx}\n", state->rdi);
+    fprintf(stdout, "$rbp\t {%lx}\n", state->rbp);
+    fprintf(stdout, "$rsp\t {%lx}\n", state->rsp);
+    fprintf(stdout, "$rip\t {%lx}\n", state->rip);
+    fprintf(stdout, "$r8\t  {%lx}\n", state->r8);
+    fprintf(stdout, "$r9\t  {%lx}\n", state->r9);
+    fprintf(stdout, "$r10\t {%lx}\n", state->r10);
+    fprintf(stdout, "$r11\t {%lx}\n", state->r11);
+    fprintf(stdout, "$r12\t {%lx}\n", state->r12);
+    fprintf(stdout, "$r13\t {%lx}\n", state->r13);
+    fprintf(stdout, "$r14\t {%lx}\n", state->r14);
+    fprintf(stdout, "$r15\t {%lx}\n", state->r15);
+    fprintf(stdout, "$rflags\t {%lx}\n", state->rflags);
+}
+
+void log_regs(mdata_binary_t* s_binary) {
+    
+    log_general(s_binary->dbi_handler->state);
+
+    if (s_binary->dbi_handler->state->sse) {
+        log_sse(s_binary->dbi_handler->state);
+    } else if (s_binary->dbi_handler->state->avx2) {
+        log_avx2(s_binary->dbi_handler->state);
+    } else if (s_binary->dbi_handler->state->avx512) {
+        fprintf(stderr, "FATAL avx512\n");
+        exit(-1);
+    }
+
+}

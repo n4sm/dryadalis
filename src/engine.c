@@ -14,6 +14,7 @@
 #include <asm/ldt.h>   
 #include <asm/prctl.h>
 #include <sys/prctl.h>
+#include <inttypes.h>
 
 #include <capstone/capstone.h>
 #include <capstone/x86.h>
@@ -25,10 +26,7 @@
 // =-=-=-=-=--
 
 int set_fs_gs(void* fs, void* gs) {
-    if (-1 == arch_prctl(ARCH_SET_FS, fs) || -1 == arch_prctl(ARCH_SET_GS, gs)) {
-        return -1;
-    }
-    return 0;
+    return arch_prctl(ARCH_SET_FS, fs) || arch_prctl(ARCH_SET_GS, gs);
 }
 
 int save_fs_gs(unsigned long* fs, unsigned long* gs) {
@@ -92,7 +90,7 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
     size_t size = PAGE_SZ;
     int n = 0;
 
-    if (!is_mapped(addr + size, s_binary)) {
+    if (!is_mapped(addr + size -1, s_binary)) {
         fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
         return -1;
     }
@@ -143,9 +141,41 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
         //     }
         // }
 
+        if (insn->id == X86_INS_XSAVEC) {
+            int test = 0;
+        }
+
         if (DEBUG) {
             fprintf(stdout, "0x%"PRIx64":\t%s\t\t%s\n", insn->address, insn->mnemonic, insn->op_str);
         }
+
+        // if (insn->detail->x86.op_count) {
+        //     for (size_t t = 0; t < insn->detail->x86.op_count; t++) {
+        //         cs_x86_op* operand = &(insn->detail->x86.operands[t]);
+
+        //         if (operand->type == X86_OP_MEM) {
+        //             int64_t base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
+        //             int index = 0;
+        //             if (operand->mem.index != X86_REG_INVALID) {
+        //                 index = read_reg(operand->mem.index, s_binary->dbi_handler->hashmap);
+        //             } else {
+        //                 index = 0x0;
+        //             }
+
+        //             if (-1 != base && -1 != index) {
+        //                 if (operand->mem.base == X86_REG_RIP) {
+        //                     fprintf(stdout, "rip: %lx\n", base);
+        //                     base = addr + insn->size;
+        //                 }
+
+        //                 if ((base + index * operand->mem.scale + operand->mem.disp) == (read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8) && !(operand->access & CS_AC_WRITE)) {
+        //                     fprintf(stdout, "read to an undefined memory location, (rsp-8) [ %lx ] == (%s) [ %lx ]\n", (read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8), insn->op_str, (base + index * operand->mem.scale + operand->mem.disp));
+        //                     exit(-1);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
         
         for (size_t i = 0; i < insn->detail->groups_count; i++) {
             if (is_cflow(insn->detail->groups[i]) && (!beg || insn->detail->groups[i] != X86_GRP_INT)) {
@@ -174,6 +204,25 @@ int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
 }
 
 // =====
+
+int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
+    if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
+        return -1;
+    }
+
+    list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
+    return 0;
+}
+
+int unmap(uintptr_t addr, size_t sz) {
+    if (-1 == munmap((void* )addr, sz)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+// ====
 
 // returns the length of the instruction for which target points to
 off_t insn_len(unsigned long target, mdata_binary_t* s_binary) {
@@ -383,37 +432,37 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                                                                         &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
     } else if (s_binary->dbi_handler->state->avx2) {
         sprintf(insns + strlen(insns), "    mov rax, %p;\
-                                            vmovaps [rax], ymm0;\
+                                            vmovups [rax], ymm0;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm1;\
+                                            vmovups [rax], ymm1;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm2;\
+                                            vmovups [rax], ymm2;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm3;\
+                                            vmovups [rax], ymm3;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm4;\
+                                            vmovups [rax], ymm4;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm5;\
+                                            vmovups [rax], ymm5;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm6;\
+                                            vmovups [rax], ymm6;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm7;\
+                                            vmovups [rax], ymm7;\
                                             mov rax, %p;\
-                                            vmovaps [rax], ymm8;\
+                                            vmovups [rax], ymm8;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm9;\
+                                            vmovups [rax], xmm9;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm10;\
+                                            vmovups [rax], xmm10;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm11;\
+                                            vmovups [rax], xmm11;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm12;\
+                                            vmovups [rax], xmm12;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm13;\
+                                            vmovups [rax], xmm13;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm14;\
+                                            vmovups [rax], xmm14;\
                                             mov rax, %p;\
-                                            vmovaps [rax], xmm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                            vmovups [rax], xmm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
                                                                         &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
@@ -475,8 +524,6 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
                                 movabs rax, [%p]; \
                                 mov rbp, rax; \
                 movabs rax, [%p]; mov es, rax; \
-                movabs rax, [%p]; mov gs, rax; \
-                movabs rax, [%p]; mov fs, rax; \
                 movabs rax, [%p]; mov ss, rax; \
                 movabs rax, [%p]; mov ds, rax; \
                                 movabs rax, [%p]; \
@@ -496,7 +543,7 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
                                 movabs rax, [%p]; \
                                 mov r15, rax;", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
                                                             &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
-                                                            &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), &(s_binary->dbi_handler->state->fs), \
+                                                            &(s_binary->dbi_handler->state->es), \
                                                             &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
                                                             &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
                                                             &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
@@ -541,37 +588,37 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
                                                                     &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
     } else if (s_binary->dbi_handler->state->avx2) {
         sprintf(insns + strlen(insns),     "mov rax, %p;\
-                                            vmovaps ymm0, [rax];\
+                                            vmovups ymm0, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm1, [rax];\
+                                            vmovups ymm1, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm2, [rax];\
+                                            vmovups ymm2, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm3, [rax];\
+                                            vmovups ymm3, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm4, [rax];\
+                                            vmovups ymm4, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm5, [rax];\
+                                            vmovups ymm5, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm6, [rax];\
+                                            vmovups ymm6, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm7, [rax];\
+                                            vmovups ymm7, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm8, [rax];\
+                                            vmovups ymm8, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm9, [rax];\
+                                            vmovups ymm9, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm10, [rax];\
+                                            vmovups ymm10, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm11, [rax];\
+                                            vmovups ymm11, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm12, [rax];\
+                                            vmovups ymm12, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm13, [rax];\
+                                            vmovups ymm13, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm14, [rax];\
+                                            vmovups ymm14, [rax];\
                                             mov rax, %p;\
-                                            vmovaps ymm15, [rax];",  &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                            vmovups ymm15, [rax];",  &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
                                                                      &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
                                                                      &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
                                                                      &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
@@ -586,10 +633,8 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
                                                 popfq; \
                                                 pop rsp; \
                                                 movabs rax, [%p]; \
-                                                push rax;\
-                                                movabs rax, [%p];\
-                                                ret;",  &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
-                                                        &(s_binary->dbi_handler->state->rip), &s_binary->dbi_handler->state->rax);
+                                                jmp rax;",  &(s_binary->dbi_handler->state->rsp), &(s_binary->dbi_handler->state->rflags), \
+                                                        &(s_binary->dbi_handler->state->rip));
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -615,25 +660,6 @@ int host_save_state(state_rtime_t* state) {
         "mov %%gs, %2\n"
         "mov %%ds, %3\n"
         "mov %%ss, %4\n"
-        // "mov %%rax, %5\n"
-        // "mov %%rbx, %6\n"
-        // "mov %%rcx, %7\n"
-        // "mov %%rdx, %8\n"
-        // "mov %%rsi, %9\n"
-        // "mov %%rdi, %10\n"
-        // "mov %%rbp, %11\n"
-        // "mov %%rsp, %12\n"
-        // "mov %%r8, %13\n"
-        // "mov %%r9, %14\n"
-        // "mov %%r10, %15\n"
-        // "mov %%r11, %16\n"
-        // "mov %%r12, %17\n"
-        // "mov %%r13, %18\n"
-        // "mov %%r14, %19\n"
-        // "mov %%r15, %20\n"
-        // :   , "=m"(state->rax), "=m"(state->rbx),
-        //     "=m"(state->rcx), "=m"(state->rdx), "=m"(state->rsi), "=m"(state->rdi), "=m"(state->rbp), "=m"(state->rsp), "=m"(state->r8),
-        //     "=m"(state->r9), "=m"(state->r10), "=m"(state->r11), "=m"(state->r12), "=m"(state->r13), "=m"(state->r14), "=m"(state->r15)
         :"=m"(state->fs), "=m"(state->cs), "=m"(state->gs), "=m"(state->ds), "=m"(state->ss): :);
 
     return 0;
@@ -661,7 +687,7 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     if (-1 == size_trampoline) {
         return -1;
     }
-    if (!realloc(s_binary->dbi_handler->dump->code, size_trampoline)) {
+    if (!(s_binary->dbi_handler->dump->code = realloc(s_binary->dbi_handler->dump->code, size_trampoline+1))) {
         exit(-1);
     }
     s_binary->dbi_handler->dump->length = size_trampoline;
@@ -669,15 +695,17 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     // main hook trampoline
 
     // restore hook trampoline
-    // s_binary->dbi_handler->restore->code = calloc(1, 256);
-    // ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
-    // if (-1 == size_trampoline_restore) {
-    //     return -1;
-    // }
-    // if (!realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore)) {
-    //     exit(-1);
-    // }
-    // s_binary->dbi_handler->restore->length = size_trampoline_restore;
+    // ============================================
+    s_binary->dbi_handler->restore->code = calloc(1, 256);
+    ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
+    if (-1 == size_trampoline_restore) {
+        return -1;
+    }
+    if (!(s_binary->dbi_handler->restore->code = realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore))) {
+        exit(-1);
+    }
+    s_binary->dbi_handler->restore->length = size_trampoline_restore;
+    // ============================
 
     s_binary->dbi_handler->u_handler = callback;
 
@@ -698,10 +726,28 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     return 0;
 }
 
+
+// write hook->code to hook->jmp saving orginal bytes in hook->orig_bytes
 int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
+    if (!is_mapped(hook->jmp, s_binary)) {
+        fprintf(stderr, "%lx isn't mapped # write_hook\n", hook->jmp);
+        
+        if (-1 == map_page(hook->jmp, PROT_EXEC | PROT_READ, s_binary)) {
+            fprintf(stderr, "map_page failed\n");
+            exit(-1);
+        }
+
+        hook->to_unmap = PAGE_ALIGN(hook->jmp);
+    }
+
     size_t mprotect_size = (PAGE_OFFT(hook->jmp) + hook->length) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ;
     int prot_curr = prot(hook->jmp, s_binary);
     int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
+
+    if (-1 == prot_curr || -1 == prot_next) {
+        fprintf(stderr, "failed to get the protections corresponding to %lx\n", hook->jmp);
+        exit(-1);
+    }
 
     if (mprotect_size > PAGE_SZ && !is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
         fprintf(stderr, "PAGE IS NOT MAPPED\n");
@@ -740,6 +786,8 @@ unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
     }
 
     hook->jmp += off_cflow;
+
+    s_binary->dbi_handler->length_cflow = insn_len(hook->jmp, s_binary);
     if (write_hook(s_binary, hook)) {
         return -1;
     }
@@ -747,11 +795,16 @@ unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
     return hook->jmp;
 }
 
-// restore the s_binary->orig_bytes at s_binary->curr_hook
+// restore the hook->orig_bytes at hook->curr_hook
 int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
     size_t mprotect_size = (PAGE_OFFT(hook->jmp) + hook->length) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ;
     int prot_curr = prot(hook->jmp, s_binary);
     int prot_next = prot(hook->jmp + PAGE_SZ, s_binary);
+
+    if (-1 == prot_curr || -1 == prot_next) {
+        fprintf(stderr, "failed to get the protections corresponding to %lx\n", hook->jmp);
+        exit(-1);
+    }
 
     if (-1  == mprotect((void* )PAGE_ALIGN(hook->jmp), mprotect_size, PROT_WRITE | PROT_READ)) {
         return -1;
@@ -782,10 +835,19 @@ void _dispatcher(mdata_binary_t* s_binary) {
         s_binary->dbi_handler->u_handler(s_binary);
     }
 
-    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary)) {
+    if (s_binary->dbi_handler->restore->jmp) {
+        if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) || s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ))) {
+            fprintf(stderr, "FATAL restore_bytes # restore\n");
+            exit(-1);
+        }
+    }
+    s_binary->dbi_handler->restore->to_unmap = 0x0;
+
+    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ))) {
         fprintf(stderr, "FATAL restore_bytes # dump\n");
         exit(-1);
     }
+    s_binary->dbi_handler->dump->to_unmap = 0x0;
 
     if (DEBUG) {
         fprintf(stdout, " = * = [ . ] = * =\n");
@@ -807,8 +869,15 @@ void _dispatcher(mdata_binary_t* s_binary) {
         exit(-1);
     }
 
-    s_binary->dbi_handler->state->rip = target;
+    s_binary->dbi_handler->restore->jmp = target - s_binary->dbi_handler->restore->length;
+    if (-1 == write_hook(s_binary, s_binary->dbi_handler->restore)) {
+        fprintf(stderr, "FATAL write_hook # restore\n");
+        exit(-1);
+    }
+
+    s_binary->dbi_handler->state->rip = target - s_binary->dbi_handler->restore->length;;
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
+
     fflush(stdout);
     continue_exec(s_binary);
 }
@@ -862,12 +931,12 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
         case X86_INS_JG:
             return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
         case X86_INS_JGE:
-            return  (((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) == ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> OF));
+            return  ((!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) == (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF)));
 
         case X86_INS_JL:
-            return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
+            return (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
         case X86_INS_JLE:
-            return is_set(s_binary, ZF) || ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> OF);
+            return is_set(s_binary, ZF) || (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
 
         case X86_INS_JO:
             return is_set(s_binary, OF);
@@ -888,6 +957,7 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
             return true;
 
         default:
+            fprintf(stderr, "not found cflow\n");
             return false;
     }
 }
@@ -895,7 +965,7 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
 // ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> F)
 
 long sign_extend(size_t size, unsigned long value) {
-    return (unsigned long) ((value & (1 << (size-1))) | ((value << 1) >> 1));
+    return (((value & (1 << ((size*8) - 1))) << (63-(size-1))) | ((value & ~(0 << ((size*8)-1)))));
 }
 
 unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) {
@@ -911,6 +981,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 
     memcpy(buf_insn, instruction, 15);
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
+        fprintf(stderr, "FATAL OPEN CAPSTONE\n");
         return -1;
     }
 
@@ -949,7 +1020,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                         return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
                     case X86_OP_IMM:
                         cs_free(insn, count);
-                        return (unsigned long)(((sign_extend(operand->size, operand->imm) << 1) >> 1) + s_binary->dbi_handler->state->rip);
+                        return (unsigned long)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
                     case X86_OP_MEM:
                         // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
                         base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
@@ -961,6 +1032,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 
                         if (-1 != base && -1 != index) {
                             if (operand->mem.base == X86_REG_RIP) {
+                                fprintf(stdout, "rip: %lx", base);
                                 base += insn->size;
                             }
 
@@ -999,7 +1071,7 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
             size_t sz = insn->size;
 
             if (-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
-                if ((ret = sys_callback(s_binary->dbi_handler->state, s_binary->dbi_handler))) {
+                if ((ret = sys_callback(s_binary))) {
                     // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
                     cs_free(insn, count);
                     return ret;
@@ -1021,12 +1093,17 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
 // =-=-=-=-
 
 void continue_exec(mdata_binary_t* s_binary) {
-    fprintf(stdout, "fs = %lx\n", s_binary->dbi_handler->instrumented_fs);
-    if (s_binary->dbi_handler->instrumented_fs && (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs))) {
+    int ret = set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs);
+    if (ret) {
         fprintf(stderr, "FATAL arch_prctl\n");
     }
 
+    if (s_binary->dbi_handler->instrumented_fs) {
+        int test = 0;
+    }
+
     __asm__ __volatile__ (
+        "vzeroall\n"
         "mov %0, %%rax\n"
         "jmp *%%rax\n" // shitty at&t
         :: "r"(s_binary->dbi_handler->restore_stub):);

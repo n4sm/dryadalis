@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include "../include/dryadalis_x86.h"
 
@@ -157,11 +158,12 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->state->avx512 = NULL;
     s_binary->dbi_handler->state->sse = NULL;
     if (__builtin_cpu_supports("sse") && !__builtin_cpu_supports("avx2")) {
-        s_binary->dbi_handler->state->sse = calloc(1, sizeof(sse_t));
+        s_binary->dbi_handler->state->sse = _mm_malloc(sizeof(sse_t), 128);
     } else if (__builtin_cpu_supports("avx2") && !__builtin_cpu_supports("avx512f")) {
-        s_binary->dbi_handler->state->avx2 = calloc(1, sizeof(avx2_t));
+        s_binary->dbi_handler->state->avx2 = _mm_malloc(sizeof(avx2_t), 256);
+        memset(s_binary->dbi_handler->state->avx2, 0x0, sizeof(avx2_t));
     } else if (__builtin_cpu_supports("avx512f")) {
-        s_binary->dbi_handler->state->avx512 = calloc(1, sizeof(avx512_t));
+        s_binary->dbi_handler->state->avx512 = _mm_malloc(sizeof(avx512_t), 512);
     }
 
     s_binary->dbi_handler->host_state = calloc(1, sizeof(state_rtime_t));
@@ -181,12 +183,14 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->dump->length = 0x0;
     s_binary->dbi_handler->dump->code = NULL;
     s_binary->dbi_handler->dump->jmp = 0x0;
+    s_binary->dbi_handler->dump->to_unmap = 0x0;
 
     s_binary->dbi_handler->restore = calloc(1, sizeof(hook_t));
     s_binary->dbi_handler->restore->orig_bytes = calloc(1, 64);
     s_binary->dbi_handler->restore->length = 0x0;
     s_binary->dbi_handler->restore->code = NULL;
     s_binary->dbi_handler->restore->jmp = 0x0;
+    s_binary->dbi_handler->restore->to_unmap = 0x0;
 
     s_binary->dispatcher = 0x0;
     s_binary->dbi_handler->u_handler = NULL;
@@ -196,6 +200,7 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->instrumented_fs = 0;
     s_binary->dbi_handler->instrumented_gs = 0;
     s_binary->dbi_handler->dtor = default_dtor;
+    s_binary->dbi_handler->length_cflow = 0x0;
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
@@ -217,15 +222,15 @@ mdata_binary_t* init_analysis(const char *s) {
 int end_analysis(mdata_binary_t *s_binary) {
     if (s_binary->dbi_handler->state) {
         if (s_binary->dbi_handler->state->sse) {
-            free(s_binary->dbi_handler->state->sse);
+            _mm_free(s_binary->dbi_handler->state->sse);
         }
 
         if (s_binary->dbi_handler->state->avx2) {
-            free(s_binary->dbi_handler->state->avx2);
+            _mm_free(s_binary->dbi_handler->state->avx2);
         }
 
         if (s_binary->dbi_handler->state->avx512) {
-            free(s_binary->dbi_handler->state->avx512);
+            _mm_free(s_binary->dbi_handler->state->avx512);
         }
         
         free(s_binary->dbi_handler->state);

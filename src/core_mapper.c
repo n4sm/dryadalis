@@ -228,11 +228,21 @@ unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
+    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
+        return s_binary->memory_map;
+    }
+
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr <= PAGE_ALIGN(addr) && addr <= (curr->addr + curr->size)) {
+        if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
             return curr;
         }
     }
+
+    // for (curr = s_binary->memory_map; curr != s_binary->memory_map; curr = (curr->list.next - offsetof(struct list_head, next))) {
+    //     if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
+    //         return curr;
+    //     }
+    // }
 
     return (mem_map_t* )-1;
 }
@@ -245,7 +255,7 @@ int prot(unsigned long addr, mdata_binary_t* s_binary) {
     
     if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
-        return false;
+        return -1;
     }
 
     return mem_descriptor->prot;
@@ -328,12 +338,12 @@ _Bool is_rx(unsigned long addr, mdata_binary_t* s_binary) {
 _Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
-    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size > addr) {
+    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
         return true;
     }
 
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr <= addr && (curr->addr + curr->size) > addr) {
+        if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
             return true;
         }
     }
@@ -438,7 +448,7 @@ void exec_binary(mdata_binary_t* s_binary) {
         "xor %%r14, %%r14\n"
         "xor %%r15, %%r15\n"
         "xor %%rbp, %%rbp\n"
-        "xorps %%xmm0, %%xmm0\n"
+        "vzeroall\n"
         "push %%rax\n"
         "xor %%rax, %%rax\n"
         "ret\n"

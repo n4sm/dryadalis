@@ -106,23 +106,23 @@ typedef struct sse_s {
 } __attribute__((packed, aligned(16))) sse_t;
 
 typedef struct avx2_s {
-    __m128i ymm0 __attribute__((packed, aligned(32)));
-    __m128i ymm1 __attribute__((packed, aligned(32)));
-    __m128i ymm2 __attribute__((packed, aligned(32)));
-    __m128i ymm3 __attribute__((packed, aligned(32)));
-    __m128i ymm4 __attribute__((packed, aligned(32)));
-    __m128i ymm5 __attribute__((packed, aligned(32)));
-    __m128i ymm6 __attribute__((packed, aligned(32)));
-    __m128i ymm7 __attribute__((packed, aligned(32)));
-    __m128i ymm8 __attribute__((packed, aligned(32)));
-    __m128i ymm9 __attribute__((packed, aligned(32)));
-    __m128i ymm10 __attribute__((packed, aligned(32)));
-    __m128i ymm11 __attribute__((packed, aligned(32)));
-    __m128i ymm12 __attribute__((packed, aligned(32)));
-    __m128i ymm13 __attribute__((packed, aligned(32)));
-    __m128i ymm14 __attribute__((packed, aligned(32)));
-    __m128i ymm15 __attribute__((packed, aligned(32)));
-} __attribute__((packed, aligned(32))) avx2_t;
+    __m256i ymm0 __attribute__((aligned(32)));
+    __m256i ymm1 __attribute__((aligned(32)));
+    __m256i ymm2 __attribute__((aligned(32)));
+    __m256i ymm3 __attribute__((aligned(32)));
+    __m256i ymm4 __attribute__((aligned(32)));
+    __m256i ymm5 __attribute__((aligned(32)));
+    __m256i ymm6 __attribute__((aligned(32)));
+    __m256i ymm7 __attribute__((aligned(32)));
+    __m256i ymm8 __attribute__((aligned(32)));
+    __m256i ymm9 __attribute__((aligned(32)));
+    __m256i ymm10 __attribute__((aligned(32)));
+    __m256i ymm11 __attribute__((aligned(32)));
+    __m256i ymm12 __attribute__((aligned(32)));
+    __m256i ymm13 __attribute__((aligned(32)));
+    __m256i ymm14 __attribute__((aligned(32)));
+    __m256i ymm15 __attribute__((aligned(32)));
+} __attribute__((aligned(32))) avx2_t;
 
 typedef struct avx512_s {
     __m512i zmm0;
@@ -203,6 +203,7 @@ typedef struct hook_s {
     unsigned char* orig_bytes;
     ssize_t length;
     unsigned long jmp;
+    uintptr_t to_unmap;
 } hook_t;
 
 typedef struct dbi_instr_s {
@@ -213,13 +214,6 @@ typedef struct dbi_instr_s {
     hook_t* dump;
     hook_t* restore;
     destructor_t dtor;
-    // unsigned char* orig_bytes;
-    // ssize_t length_trampoline;
-    // unsigned char* trampoline;
-    // ssize_t length_trampoline_restore;
-    // unsigned long jmp_restore;
-    // unsigned char* orig_bytes_restore;
-    // unsigned char* trampoline_restore;
     unsigned char* dump_stub;
     unsigned char* restore_stub;
     unsigned long* curr_hook;
@@ -227,6 +221,7 @@ typedef struct dbi_instr_s {
     hashmap_t* hashmap;
     unsigned long instrumented_fs;
     unsigned long instrumented_gs;
+    int64_t length_cflow;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
@@ -251,7 +246,7 @@ typedef struct mdata_binary_s {
     dbi_instr_t* dbi_handler;
 } mdata_binary_t;
 
-typedef unsigned long (*hook_syscall) (state_rtime_t* state, dbi_instr_t* dbi_handler);
+typedef unsigned long (*hook_syscall) (mdata_binary_t* s_binary);
 
 // macro
 
@@ -356,6 +351,11 @@ _Bool is_16bits(int reg);
 _Bool is_32bits(int reg);
 _Bool is_64bits(int reg);
 unsigned long read_reg(int key, hashmap_t* hashmap);
+
+void log_regs(mdata_binary_t* s_binary);
+void log_general(state_rtime_t* state);
+void log_avx2(state_rtime_t* state);
+void log_sse(state_rtime_t* state);
 
 _Bool is_cf(unsigned long eflags);
 _Bool is_pf(unsigned long eflags);

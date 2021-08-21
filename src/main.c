@@ -19,6 +19,8 @@ int test(void* s_binary) {
     // fprintf(stdout, "xmm0: %lx, ", (xmm0));
     insn_count += 1;
     fprintf(stdout, "bbl_count: 0x%x\n", insn_count);
+
+    log_avx2(((mdata_binary_t* )s_binary)->dbi_handler->state);
     return 0;
 }
 

@@ -25,7 +25,9 @@
 
 // ==
 
-unsigned long hook_brk(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_brk(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
     state->rax = syscall(__NR_brk, state->rdi);
 
     // if (DEBUG) {
@@ -35,7 +37,10 @@ unsigned long hook_brk(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     return 0;
 }
 
-unsigned long hook_arch_prctl(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_arch_prctl(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+    dbi_instr_t* dbi_handler = s_binary->dbi_handler;
+
     int code = (int)state->rdi;
     unsigned long addr = state->rsi;
 
@@ -105,7 +110,9 @@ unsigned long hook_arch_prctl(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     return 0;
 }
 
-unsigned long hook_access(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_access(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
     const char* filename = (const char* )state->rdi;
     int mode = state->rsi;
 
@@ -115,7 +122,9 @@ unsigned long hook_access(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     return 0;
 }
 
-unsigned long hook_mmap(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_mmap(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
     unsigned long addr = state->rdi;
     size_t length = state->rsi;
     int prot = state->rdx;
@@ -123,20 +132,27 @@ unsigned long hook_mmap(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     int fd = state->r8;
     int offt = state->r9;
 
+    list_add_map(s_binary, prot, addr, length);
+
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     fprintf(stdout, "[ =*= ] mmap(%lx, %lx, %x, %x, %x)\n", addr, length, prot, fd, offt);
 
     return 0;
 }
 
-unsigned long hook_writev(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_writev(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
     state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
     fprintf(stderr, "[ =*= ] writev(%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
     
     return 0;
 }
 
-unsigned long hook_exit(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_exit(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+    dbi_instr_t* dbi_handler = s_binary->dbi_handler;
+
     // state->rax = syscall(__NR_exit, state->rdi);
     fprintf(stderr, "[ =*= ] exit(%lx)\n", state->rdi);
     dbi_handler->dtor();
@@ -144,7 +160,10 @@ unsigned long hook_exit(state_rtime_t* state, dbi_instr_t* dbi_handler) {
     return 0;
 }
 
-unsigned long hook_exit_grp(state_rtime_t* state, dbi_instr_t* dbi_handler) {
+unsigned long hook_exit_grp(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+    dbi_instr_t* dbi_handler = s_binary->dbi_handler;
+
     // state->rax = syscall(__NR_exit_group, state->rdi);
     fprintf(stderr, "[ =*= ] exit_grp(%lx)\n", state->rdi);
     dbi_handler->dtor();
