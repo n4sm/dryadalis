@@ -25,7 +25,7 @@
 
 // ==
 
-unsigned long hook_brk(mdata_binary_t* s_binary) {
+uint64_t hook_brk(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_brk, state->rdi);
@@ -37,12 +37,12 @@ unsigned long hook_brk(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_arch_prctl(mdata_binary_t* s_binary) {
+uint64_t hook_arch_prctl(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
     int code = (int)state->rdi;
-    unsigned long addr = state->rsi;
+    uint64_t addr = state->rsi;
 
     char code_debug[64] = {0};
 
@@ -95,7 +95,7 @@ unsigned long hook_arch_prctl(mdata_binary_t* s_binary) {
     // state->rax = syscall(__NR_arch_prctl, code, addr);
     // we don't emulate the syscall
 
-    unsigned long try_ret = syscall(__NR_arch_prctl, code, addr);
+    uint64_t try_ret = syscall(__NR_arch_prctl, code, addr);
 
     if (code == ARCH_SET_FS) {
         if (-1 == set_fs_gs((void* )dbi_handler->host_state->fs, (void* )dbi_handler->host_state->gs)) {
@@ -110,7 +110,7 @@ unsigned long hook_arch_prctl(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_access(mdata_binary_t* s_binary) {
+uint64_t hook_access(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     const char* filename = (const char* )state->rdi;
@@ -122,10 +122,10 @@ unsigned long hook_access(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_mmap(mdata_binary_t* s_binary) {
+uint64_t hook_mmap(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    unsigned long addr = state->rdi;
+    uint64_t addr = state->rdi;
     size_t length = state->rsi;
     int prot = state->rdx;
     int flags = state->rcx;
@@ -140,7 +140,7 @@ unsigned long hook_mmap(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_writev(mdata_binary_t* s_binary) {
+uint64_t hook_writev(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
@@ -149,7 +149,7 @@ unsigned long hook_writev(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_exit(mdata_binary_t* s_binary) {
+uint64_t hook_exit(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
@@ -160,7 +160,7 @@ unsigned long hook_exit(mdata_binary_t* s_binary) {
     return 0;
 }
 
-unsigned long hook_exit_grp(mdata_binary_t* s_binary) {
+uint64_t hook_exit_grp(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
@@ -174,8 +174,7 @@ unsigned long hook_exit_grp(mdata_binary_t* s_binary) {
 // ====
 
 hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
-    switch (syscall_number)
-    {
+    switch (syscall_number) {
     case __NR_brk:
         return hook_brk;
     

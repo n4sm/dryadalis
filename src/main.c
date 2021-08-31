@@ -20,7 +20,8 @@ int test(void* s_binary) {
     insn_count += 1;
     fprintf(stdout, "bbl_count: 0x%x\n", insn_count);
 
-    log_avx2(((mdata_binary_t* )s_binary)->dbi_handler->state);
+    // log_avx2(((mdata_binary_t* )s_binary)->dbi_handler->state);
+    log_regs(s_binary);
     return 0;
 }
 
@@ -28,11 +29,13 @@ int main(int argc, char **argv) {
     mdata_binary_t *s_binary = NULL;
     insn_count = 0;
     arg_t arguments = {.argc = argc, .argv = argv};
+    request_t req = {.callback = test, .address = 0x0, .type = INSTRUMENT_BBL};
     if (-1 == (long)(s_binary = map_binary(argv[1], &arguments)))
         return -1;
 
     merge_address_space(s_binary);
     log_map(s_binary->memory_map);
-    instrument(s_binary, test);
+    s_binary->dbi_handler->request = &req;
+    instrument(s_binary);
     return 0;
 }

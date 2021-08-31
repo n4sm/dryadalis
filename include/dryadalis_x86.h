@@ -36,6 +36,10 @@
 #define STACK_SZ 0x50000
 #define DEBUG true 
 
+#define INSTRUMENT_BBL 0x0
+#define INSTRUMENT_ADDR 0x1
+#define INSTRUMENT_INSTR 0x2
+
 // eflags
 
 #define CF (1 << 0)
@@ -52,21 +56,26 @@
 #define AC (1 << 18)
 
 // structures
-
 typedef struct args_syscall_s {
-    unsigned long rdi;
-    unsigned long rsi;
-    unsigned long rdx;
-    unsigned long rcx;
-    unsigned long r8;
-    unsigned long r9;
+    uint64_t rdi;
+    uint64_t rsi;
+    uint64_t rdx;
+    uint64_t rcx;
+    uint64_t r8;
+    uint64_t r9;
 } args_syscall_t;
 
 typedef int (*u_callback_t) (void* s_binary);
 typedef void (*destructor_t) (void);
 
+typedef struct request_s {
+    int type;
+    uint64_t address;
+    u_callback_t callback;
+} request_t;
+
 typedef struct hashmap_s {
-    unsigned long** value;
+    uint64_t** value;
 } hashmap_t;
 
 _Bool must_change;
@@ -159,38 +168,38 @@ typedef struct avx512_s {
 } avx512_t;
 
 typedef struct state_rtime_s {
-    unsigned long rax;
-    unsigned long rbx;
-    unsigned long rcx;
-    unsigned long rdx;
-    unsigned long rsi;
-    unsigned long rdi;
-    unsigned long rbp;
+    uint64_t rax;
+    uint64_t rbx;
+    uint64_t rcx;
+    uint64_t rdx;
+    uint64_t rsi;
+    uint64_t rdi;
+    uint64_t rbp;
     // ==
-    unsigned long rsp;
-    unsigned long rip;
-    unsigned long rflags;
-    unsigned long cs;
-    unsigned long ss;
-    unsigned long gs;
-    unsigned long es;
-    unsigned long ds;
-    unsigned long fs;
+    uint64_t rsp;
+    uint64_t rip;
+    uint64_t rflags;
+    uint64_t cs;
+    uint64_t ss;
+    uint64_t gs;
+    uint64_t es;
+    uint64_t ds;
+    uint64_t fs;
     // ==
-    unsigned long r8;
-    unsigned long r9;
-    unsigned long r10;
-    unsigned long r11;
-    unsigned long r12;
-    unsigned long r13;
-    unsigned long r14;
-    unsigned long r15;
+    uint64_t r8;
+    uint64_t r9;
+    uint64_t r10;
+    uint64_t r11;
+    uint64_t r12;
+    uint64_t r13;
+    uint64_t r14;
+    uint64_t r15;
 
     sse_t* sse;
     avx2_t* avx2;
     avx512_t* avx512;
 
-    unsigned long null_entry;
+    uint64_t null_entry;
 } state_rtime_t;
 
 typedef struct arg_s {
@@ -202,7 +211,7 @@ typedef struct hook_s {
     unsigned char* code;
     unsigned char* orig_bytes;
     ssize_t length;
-    unsigned long jmp;
+    uint64_t jmp;
     uintptr_t to_unmap;
 } hook_t;
 
@@ -216,24 +225,25 @@ typedef struct dbi_instr_s {
     destructor_t dtor;
     unsigned char* dump_stub;
     unsigned char* restore_stub;
-    unsigned long* curr_hook;
-    unsigned long *host_rsp;
+    uint64_t* curr_hook;
+    uint64_t *host_rsp;
     hashmap_t* hashmap;
-    unsigned long instrumented_fs;
-    unsigned long instrumented_gs;
+    uint64_t instrumented_fs;
+    uint64_t instrumented_gs;
     int64_t length_cflow;
+    request_t* request;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
     struct list_head list;
-    unsigned long addr;
+    uint64_t addr;
     ssize_t size;
     int prot;
 } mem_map_t;
 
 typedef struct mdata_binary_s {
     unsigned char *fbinary; // malloc pointer to the binary
-    unsigned long len_file;
+    uint64_t len_file;
     const char *filename;
     int fd; // fd of the binary
     Elf64_Phdr** s_ph; // list of pointer to the program header
@@ -242,11 +252,11 @@ typedef struct mdata_binary_s {
     struct mdata_binary_s *interp; // pointer to the real interp mapped
     unsigned char *base; // real base address of the manual mapped binary
     mem_map_t* memory_map;
-    unsigned long dispatcher;
+    uint64_t dispatcher;
     dbi_instr_t* dbi_handler;
 } mdata_binary_t;
 
-typedef unsigned long (*hook_syscall) (mdata_binary_t* s_binary);
+typedef uint64_t (*hook_syscall) (mdata_binary_t* s_binary);
 
 // macro
 
@@ -284,45 +294,45 @@ mdata_binary_t *init_analysis(const char *s);
 int end_analysis(mdata_binary_t *s_binary);
 mdata_binary_t* alloc_binary();
 int free_binary(mdata_binary_t *bi);
-int add_auxvt(unsigned long id, unsigned long* origin, unsigned long *base_auxvt, unsigned long val);
+int add_auxvt(uint64_t id, uint64_t* origin, uint64_t *base_auxvt, uint64_t val);
 
 // core_mapper
 
 mdata_binary_t* map_binary(const char *filename, arg_t* arguments);
 mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
-unsigned long* setup_stack(char **argv, mdata_binary_t* s_binary, int argc);
+uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc);
 void exec_binary(mdata_binary_t* s_binary);
-int list_add_map(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size);
+int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
 int free_memory_map(mem_map_t* memory_map);
 int log_map(mem_map_t* memory_map);
 mem_map_t* merge_address_space(mdata_binary_t* s_binary);
-mem_map_t* mem_desc(unsigned long addr, mdata_binary_t* s_binary);
-_Bool is_mapped(unsigned long addr, mdata_binary_t* s_binary);
-_Bool is_rx(unsigned long addr, mdata_binary_t* s_binary);
-_Bool is_ro(unsigned long addr, mdata_binary_t* s_binary);
-_Bool is_rw(unsigned long addr, mdata_binary_t* s_binary);
-_Bool is_rwx(unsigned long addr, mdata_binary_t* s_binary);
+mem_map_t* mem_desc(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_rx(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_ro(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_rw(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary);
 
 // returns the prot according to the address
-int prot(unsigned long addr, mdata_binary_t* s_binary);
-unsigned long* map_stack();
-int merge_pages(mdata_binary_t* s_binary, int prot, unsigned long addr, ssize_t size);
+int prot(uint64_t addr, mdata_binary_t* s_binary);
+uint64_t* map_stack();
+int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
 
 // engine
 
 // returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg);
+int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
-unsigned long craft_hook(mdata_binary_t* s_binary);
+uint64_t craft_hook(mdata_binary_t* s_binary);
 int restore_hook(unsigned char* patch, mdata_binary_t* s_binary);
 
-int instrument(mdata_binary_t* s_binary, u_callback_t callback);
-unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook);
+int instrument(mdata_binary_t* s_binary);
+uint64_t _instrument(mdata_binary_t* s_binary, hook_t* hook);
 
-unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary);
+uint64_t eval_target(unsigned char* instruction, mdata_binary_t* s_binary);
 void _dispatcher(mdata_binary_t* s_binary);
 
 void alloc_state(mdata_binary_t* s_binary);
@@ -343,29 +353,29 @@ int set_fs_gs(void* fs, void* gs);
 
 hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary);
 int free_hashmap(hashmap_t* hashmap);
-void update_reg(int key, hashmap_t* hashmap, unsigned long value);
+void update_reg(int key, hashmap_t* hashmap, uint64_t value);
 
 _Bool is_8bits_right(int reg);
 _Bool is_8bits_left(int reg);
 _Bool is_16bits(int reg);
 _Bool is_32bits(int reg);
 _Bool is_64bits(int reg);
-unsigned long read_reg(int key, hashmap_t* hashmap);
+uint64_t read_reg(int key, hashmap_t* hashmap);
 
 void log_regs(mdata_binary_t* s_binary);
 void log_general(state_rtime_t* state);
 void log_avx2(state_rtime_t* state);
 void log_sse(state_rtime_t* state);
 
-_Bool is_cf(unsigned long eflags);
-_Bool is_pf(unsigned long eflags);
-_Bool is_af(unsigned long eflags);
-_Bool is_zf(unsigned long eflags);
-_Bool is_sf(unsigned long eflags);
-_Bool is_tf(unsigned long eflags);
-_Bool is_if(unsigned long eflags);
-_Bool is_df(unsigned long eflags);
-_Bool is_of(unsigned long eflags);
+_Bool is_cf(uint64_t eflags);
+_Bool is_pf(uint64_t eflags);
+_Bool is_af(uint64_t eflags);
+_Bool is_zf(uint64_t eflags);
+_Bool is_sf(uint64_t eflags);
+_Bool is_tf(uint64_t eflags);
+_Bool is_if(uint64_t eflags);
+_Bool is_df(uint64_t eflags);
+_Bool is_of(uint64_t eflags);
 
 // syscall_hook
 

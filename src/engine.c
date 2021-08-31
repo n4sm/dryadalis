@@ -29,7 +29,7 @@ int set_fs_gs(void* fs, void* gs) {
     return arch_prctl(ARCH_SET_FS, fs) || arch_prctl(ARCH_SET_GS, gs);
 }
 
-int save_fs_gs(unsigned long* fs, unsigned long* gs) {
+int save_fs_gs(uint64_t* fs, uint64_t* gs) {
     if (-1 == arch_prctl(ARCH_GET_FS, fs) || -1 == arch_prctl(ARCH_GET_GS, gs)) {
         return -1;
     }
@@ -81,10 +81,10 @@ _Bool is_endbr64(unsigned char* s) {
 }
 
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
-int opcodes_cflow(unsigned long addr, mdata_binary_t* s_binary, _Bool beg) {
+int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
     csh handle;
     unsigned char insn_buffer[PAGE_SZ] = {0};
-    unsigned long saved_addr = addr;
+    uint64_t saved_addr = addr;
     unsigned char* insn_buf = insn_buffer;
     
     size_t size = PAGE_SZ;
@@ -225,7 +225,7 @@ int unmap(uintptr_t addr, size_t sz) {
 // ====
 
 // returns the length of the instruction for which target points to
-off_t insn_len(unsigned long target, mdata_binary_t* s_binary) {
+off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
     csh handle;
 	cs_insn *insn;
     ssize_t count;
@@ -308,18 +308,18 @@ int dump_hook(unsigned char* patch, mdata_binary_t* s_binary) {
 
 // =-=-=-=-=--
 
-// unsigned long hook_reloc(mdata_binary_t* s_binary) {
+// uint64_t hook_reloc(mdata_binary_t* s_binary) {
 //     unsigned char *reloc = mmap(RELOC_ADDR_RESTORE, 0x1000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
 
 //     if (MAP_FAILED == reloc) {
 //         return -1;
 //     }
 
-//     return (unsigned long)reloc;
+//     return (uint64_t)reloc;
 // }
 
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
-unsigned long craft_hook(mdata_binary_t* s_binary) {
+uint64_t craft_hook(mdata_binary_t* s_binary) {
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -369,7 +369,7 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                              mov rax, r14;\
                              movabs [%p], rax; \
                              mov rax, r15;\
-                             movabs [%p], rax;", &(s_binary->dbi_handler->state->rsp), (unsigned long)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
+                             movabs [%p], rax;", &(s_binary->dbi_handler->state->rsp), (uint64_t)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
                                                            &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
                                                            &(s_binary->dbi_handler->state->rbp), \
                                                            &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
@@ -478,7 +478,7 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
                                     push rax;\
                                     movabs rax, [%p];\
                                     movabs [%p], rax;\
-                                    ret", (unsigned long)s_binary, (unsigned long)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
+                                    ret", (uint64_t)s_binary, (uint64_t)(s_binary->dispatcher), s_binary->dbi_handler->curr_hook, &(s_binary->dbi_handler->state->rip));
 
     err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
     if (err != KS_ERR_OK) {
@@ -497,7 +497,7 @@ unsigned long craft_hook(mdata_binary_t* s_binary) {
     return STUB_ADDR_DUMP;
 }
 
-unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
+uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -650,7 +650,7 @@ unsigned long craft_restore_stub(mdata_binary_t* s_binary) {
     }
 
     memcpy((void* )STUB_ADDR_RESTORE, encode, size);
-    return (unsigned long)STUB_ADDR_RESTORE;
+    return (uint64_t)STUB_ADDR_RESTORE;
 }
 
 int host_save_state(state_rtime_t* state) {
@@ -667,17 +667,30 @@ int host_save_state(state_rtime_t* state) {
 
 // =-=-=-=-=--
 
+_Bool parse_request(mdata_binary_t* s_binary, request_t* request) {
+    switch (request->type) {
+    case INSTRUMENT_ADDR:
+        return ((request->address >= s_binary->dbi_handler->state->rip) && (request->address < s_binary->dbi_handler->dump->jmp)) ? true : false;
+
+    case INSTRUMENT_BBL:
+        return true;
+    
+    default:
+        return false;
+    }
+}
+
 // main instrumentation abstraction
-int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
-    unsigned long entry = (unsigned long)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
-    s_binary->dbi_handler->curr_hook = calloc(1, sizeof(unsigned long));
-    s_binary->dbi_handler->host_rsp = (unsigned long* )((map_stack()));
-    s_binary->dispatcher = (unsigned long)_dispatcher;
+int instrument(mdata_binary_t* s_binary) {
+    uint64_t entry = (uint64_t)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
+    s_binary->dbi_handler->curr_hook = calloc(1, sizeof(uint64_t));
+    s_binary->dbi_handler->host_rsp = (uint64_t* )((map_stack()));
+    s_binary->dispatcher = (uint64_t)_dispatcher;
 
     if (DEBUG) {
         fprintf(stdout, "e_entry: %lx\n", entry);
     }
-    
+
     if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
         return -1;
     }
@@ -707,13 +720,13 @@ int instrument(mdata_binary_t* s_binary, u_callback_t callback) {
     s_binary->dbi_handler->restore->length = size_trampoline_restore;
     // ============================
 
-    s_binary->dbi_handler->u_handler = callback;
+    s_binary->dbi_handler->u_handler = s_binary->dbi_handler->request->callback;
 
     s_binary->dbi_handler->dump->jmp = entry; // it means we begin to analyse @ entry and 
     *(s_binary->dbi_handler->curr_hook) = _instrument(s_binary, // here the field is updated to target the right cflow instruction 
                                                       s_binary->dbi_handler->dump); // which is rewritten by the hook
 
-    s_binary->dbi_handler->take_callback = true;
+    s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request);
 
     //host_save_state(s_binary->dbi_handler->host_state);
     if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {
@@ -759,12 +772,6 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
         return -1;
     }
     
-    // for (size_t i = 0; i < hook->length; i++) {
-    //     fprintf(stdout, "%x", hook->orig_bytes[i]);
-    // }
-
-    // printf("\n");
-    
     memcpy((void* )(hook->jmp), hook->code, hook->length);
 
     if (mprotect((void* )PAGE_ALIGN((hook->jmp)), PAGE_SZ, prot_curr)) {
@@ -777,7 +784,7 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
 }
 
 // internal part, returns the offset right after the cflow instruction
-unsigned long _instrument(mdata_binary_t* s_binary, hook_t* hook) {
+uint64_t _instrument(mdata_binary_t* s_binary, hook_t* hook) {
     off_t off_cflow = opcodes_cflow(hook->jmp, s_binary, true);
 
     if (-1 == off_cflow) {
@@ -836,14 +843,14 @@ void _dispatcher(mdata_binary_t* s_binary) {
     }
 
     if (s_binary->dbi_handler->restore->jmp) {
-        if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) || s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ))) {
+        if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) || (s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
             fprintf(stderr, "FATAL restore_bytes # restore\n");
             exit(-1);
         }
     }
     s_binary->dbi_handler->restore->to_unmap = 0x0;
 
-    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ))) {
+    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
         fprintf(stderr, "FATAL restore_bytes # dump\n");
         exit(-1);
     }
@@ -853,7 +860,7 @@ void _dispatcher(mdata_binary_t* s_binary) {
         fprintf(stdout, " = * = [ . ] = * =\n");
     }
 
-    unsigned long target = eval_target((void* )*(s_binary->dbi_handler->curr_hook), s_binary);
+    uint64_t target = eval_target((void* )*(s_binary->dbi_handler->curr_hook), s_binary);
     if (-1 == target) {
         fprintf(stderr, "FATAL eval_target \n");
         exit(-1);
@@ -875,7 +882,9 @@ void _dispatcher(mdata_binary_t* s_binary) {
         exit(-1);
     }
 
-    s_binary->dbi_handler->state->rip = target - s_binary->dbi_handler->restore->length;;
+    s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request);
+
+    s_binary->dbi_handler->state->rip = target - s_binary->dbi_handler->restore->length;
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
 
     fflush(stdout);
@@ -884,7 +893,7 @@ void _dispatcher(mdata_binary_t* s_binary) {
 //== internal functions used by eval_target
 
 // Does the instruction tests flags ?
-_Bool is_test(unsigned long cs_eflags) {
+_Bool is_test(uint64_t cs_eflags) {
     return (cs_eflags & (X86_EFLAGS_TEST_AF | X86_EFLAGS_TEST_CF | X86_EFLAGS_TEST_DF | X86_EFLAGS_TEST_IF | X86_EFLAGS_TEST_OF | X86_EFLAGS_TEST_SF | X86_EFLAGS_TEST_TF | X86_EFLAGS_TEST_ZF)) != 0;
 }
 
@@ -894,7 +903,7 @@ _Bool is_set(mdata_binary_t* s_binary, int flag) {
         fprintf(stdout, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
     }
 
-    unsigned long eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
+    uint64_t eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
     
     if (-1 == eflags) {
         fprintf(stderr, "FATAL read eflags\n");
@@ -964,32 +973,14 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
 
 // ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> F)
 
-long sign_extend(size_t size, unsigned long value) {
+long sign_extend(size_t size, uint64_t value) {
     return (((value & (1 << ((size*8) - 1))) << (63-(size-1))) | ((value & ~(0 << ((size*8)-1)))));
 }
 
-unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) {
-    csh handle;
-	cs_insn *insn;
-    ssize_t count;
-    char buf_insn[16] = {0};
-    _Bool achieve = false;
-
-    if (!instruction) {
-        return -1;
-    }
-
-    memcpy(buf_insn, instruction, 15);
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
-        fprintf(stderr, "FATAL OPEN CAPSTONE\n");
-        return -1;
-    }
-
-    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    count = cs_disasm(handle, (const uint8_t *)buf_insn, 15, 0, 1, &insn);
-
+uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruction) {
     cs_detail* details = insn->detail;
     cs_x86* x86 = &(details->x86);
+    _Bool achieve = false;
 
     for (size_t i = 0; i < details->groups_count; i++) {
         if (details->groups[i] == X86_GRP_JUMP || details->groups[i] == X86_GRP_BRANCH_RELATIVE || is_call(details->groups[i])) {
@@ -1009,18 +1000,16 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                         return -1;
                     }
 
-                    *(unsigned long* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
+                    *(uint64_t* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
                     achieve = true;
                 }
 
                 switch (operand->type) {
-                    unsigned long base, index;
+                    uint64_t base, index;
                     case X86_OP_REG:
-                        cs_free(insn, count);
                         return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
                     case X86_OP_IMM:
-                        cs_free(insn, count);
-                        return (unsigned long)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
+                        return (uint64_t)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
                     case X86_OP_MEM:
                         // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
                         base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
@@ -1040,12 +1029,10 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                                 fprintf(stdout, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
                             }
 
-                            cs_free(insn, count);
-                            return *((unsigned long* )(base + index * operand->mem.scale + operand->mem.disp));
+                            return *((uint64_t* )(base + index * operand->mem.scale + operand->mem.disp));
                         }
 
                         fprintf(stderr, "failed to read registers, base [ %x ] => [ %lx ], index [ %x ] => [ %lx ]\n", operand->mem.base, base, operand->mem.index, index);
-                        cs_free(insn, count);
                         return -1;
 
                     default:
@@ -1058,36 +1045,56 @@ unsigned long eval_target(unsigned char* instruction, mdata_binary_t* s_binary) 
                     fprintf(stdout, " not taken ");
                 }
 
-                cs_free(insn, count);
-                return (unsigned long)(instruction + insn->size);
+                return (uint64_t)(instruction + insn->size);
             }
         } else if (is_ret(details->groups[i])) {
             s_binary->dbi_handler->state->rsp += 8;
-            cs_free(insn, count);
-            return *((unsigned long* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
+            return *((uint64_t* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
         } else if (is_interrupt(details->groups[i])) {
             hook_syscall sys_callback = NULL;
-            unsigned long ret = 0x0;
+            uint64_t ret = 0x0;
             size_t sz = insn->size;
 
             if (-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
                 if ((ret = sys_callback(s_binary))) {
                     // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
-                    cs_free(insn, count);
                     return ret;
                 }
 
-                cs_free(insn, count);
-                return (unsigned long)(instruction + sz);
+                return (uint64_t)(instruction + sz);
             }
 
-            return (unsigned long)instruction;
+            return (uint64_t)instruction;
         }
     }
 
     // if that's not a return, a call or a jmp it can be an interrupt and we handle that by a diffrent way so we ignore it for now
-    cs_free(insn, count);
-    return (unsigned long)(instruction + insn->size);
+    return (uint64_t)(instruction);
+}
+
+uint64_t eval_target(unsigned char* instruction, mdata_binary_t* s_binary) {
+    csh handle;
+	cs_insn *insn;
+    char buf_insn[16] = {0};
+    uint64_t target = 0;
+
+    if (!instruction || !is_mapped((uint64_t)instruction, s_binary)) {
+        return -1;
+    }
+
+    memcpy(buf_insn, instruction, 15);
+	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
+        fprintf(stderr, "FATAL OPEN CAPSTONE\n");
+        return -1;
+    }
+
+    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+    cs_disasm(handle, (const uint8_t *)buf_insn, 16, 0, 1, &insn);
+
+    target = __eval_target(insn, s_binary, (uint64_t)instruction);
+    cs_free(insn, 1);  
+    
+    return target;
 }
 
 // =-=-=-=-

@@ -45,7 +45,7 @@ _Bool is_pie(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) {
 // *=*=*=*=*=*=
 
 uint64_t search_base_addr(Elf64_Phdr *buffer_mdata_phdr[], Elf64_Ehdr *eh_ptr) {
-    unsigned long min = buffer_mdata_phdr[0]->p_vaddr;
+    uint64_t min = buffer_mdata_phdr[0]->p_vaddr;
 
     for (int i = 0; i < eh_ptr->e_phnum; ++i) {
         if (buffer_mdata_phdr[i]->p_type == PT_LOAD
@@ -273,7 +273,7 @@ int end_analysis(mdata_binary_t *s_binary) {
 // *=*=*=*=*=*=*=*=s--
 
 // add_auxvt adds a auxilary vector to the zeroed @base_auxvt memory area
-int add_auxvt(unsigned long id, unsigned long* origin, unsigned long *base_auxvt, unsigned long val) {
+int add_auxvt(uint64_t id, uint64_t* origin, uint64_t *base_auxvt, uint64_t val) {
     int i_target = 0;
 
     for ( ; base_auxvt[i_target] || base_auxvt[i_target+1]; i_target++);

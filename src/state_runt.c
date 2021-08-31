@@ -18,7 +18,7 @@
 
 #include "../include/dryadalis_x86.h"
 
-const unsigned long x86_reg_c[] = {
+const uint64_t x86_reg_c[] = {
 	X86_REG_INVALID,
 	X86_REG_AH, X86_REG_AL, X86_REG_AX, X86_REG_BH, X86_REG_BL,
 	X86_REG_BP, X86_REG_BPL, X86_REG_BX, X86_REG_CH, X86_REG_CL,
@@ -74,7 +74,7 @@ const unsigned long x86_reg_c[] = {
 };
 
 hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
-    hashmap->value = calloc(1, (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])) * sizeof(unsigned long* ));
+    hashmap->value = calloc(1, (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])) * sizeof(uint64_t* ));
 
     for (size_t i = 0; x86_reg_c[i] != X86_REG_ENDING; i++) { // iter through all the elem
         hashmap->value[x86_reg_c[i]] = &(s_binary->dbi_handler->state->null_entry);
@@ -132,7 +132,7 @@ int free_hashmap(hashmap_t* hashmap) {
 }
 
 // it will be quite long and boring but I will code some wrappers around the update_<reg>() functions
-void update_reg(int key, hashmap_t* hashmap, unsigned long value) {
+void update_reg(int key, hashmap_t* hashmap, uint64_t value) {
     *(hashmap->value[key]) = value;
 }
 
@@ -199,7 +199,7 @@ _Bool is_512bits(int reg) {
             (reg == X86_REG_ZMM30) || (reg == X86_REG_ZMM31);
 }
 
-unsigned long read_reg(int key, hashmap_t* hashmap) {
+uint64_t read_reg(int key, hashmap_t* hashmap) {
     if (is_8bits_right(key)) {
         return (*(hashmap->value[key]) & 0xff);
     } else if (is_8bits_left(key)) {
@@ -322,8 +322,8 @@ void log_general(state_rtime_t* state) {
     fprintf(stdout, "$rbp\t {%lx}\n", state->rbp);
     fprintf(stdout, "$rsp\t {%lx}\n", state->rsp);
     fprintf(stdout, "$rip\t {%lx}\n", state->rip);
-    fprintf(stdout, "$r8\t  {%lx}\n", state->r8);
-    fprintf(stdout, "$r9\t  {%lx}\n", state->r9);
+    fprintf(stdout, "$r8 \t {%lx}\n", state->r8);
+    fprintf(stdout, "$r9 \t {%lx}\n", state->r9);
     fprintf(stdout, "$r10\t {%lx}\n", state->r10);
     fprintf(stdout, "$r11\t {%lx}\n", state->r11);
     fprintf(stdout, "$r12\t {%lx}\n", state->r12);
