@@ -18,10 +18,10 @@ int test(void* s_binary) {
     // unsigned xmm0 = *(unsigned long* )(&(((mdata_binary_t* )s_binary)->dbi_handler->state->sse->xmm0));
     // fprintf(stdout, "xmm0: %lx, ", (xmm0));
     insn_count += 1;
-    fprintf(stdout, "bbl_count: 0x%x\n", insn_count);
+    // fprintf(stdout, "bbl_count: 0x%x\n", insn_count);
 
     // log_avx2(((mdata_binary_t* )s_binary)->dbi_handler->state);
-    log_regs(s_binary);
+    // log_regs(s_binary);
     return 0;
 }
 

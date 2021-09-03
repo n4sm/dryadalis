@@ -208,8 +208,8 @@ typedef struct arg_s {
 } arg_t;
 
 typedef struct hook_s {
-    unsigned char* code;
-    unsigned char* orig_bytes;
+    uint8_t* code;
+    uint8_t* orig_bytes;
     ssize_t length;
     uint64_t jmp;
     uintptr_t to_unmap;
@@ -223,8 +223,8 @@ typedef struct dbi_instr_s {
     hook_t* dump;
     hook_t* restore;
     destructor_t dtor;
-    unsigned char* dump_stub;
-    unsigned char* restore_stub;
+    uint8_t* dump_stub;
+    uint8_t* restore_stub;
     uint64_t* curr_hook;
     uint64_t *host_rsp;
     hashmap_t* hashmap;
@@ -242,7 +242,7 @@ typedef struct mem_map_s {
 } mem_map_t;
 
 typedef struct mdata_binary_s {
-    unsigned char *fbinary; // malloc pointer to the binary
+    uint8_t *fbinary; // malloc pointer to the binary
     uint64_t len_file;
     const char *filename;
     int fd; // fd of the binary
@@ -250,7 +250,7 @@ typedef struct mdata_binary_s {
     Elf64_Ehdr* eh;
     _Bool pie; // is pie ?
     struct mdata_binary_s *interp; // pointer to the real interp mapped
-    unsigned char *base; // real base address of the manual mapped binary
+    uint8_t *base; // real base address of the manual mapped binary
     mem_map_t* memory_map;
     uint64_t dispatcher;
     dbi_instr_t* dbi_handler;
@@ -283,7 +283,7 @@ typedef uint64_t (*hook_syscall) (mdata_binary_t* s_binary);
 
 // elf parsing
 
-_Bool is_elf(unsigned char *eh_ptr);
+_Bool is_elf(uint8_t *eh_ptr);
 uint64_t search_base_addr(Elf64_Phdr *buffer_mdata_phdr[], Elf64_Ehdr *eh_ptr);
 Elf64_Phdr *search_pt_dyn(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr);
 int parse_phdr(Elf64_Ehdr *ptr, Elf64_Phdr *buffer_mdata_ph[]);
@@ -324,15 +324,15 @@ int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size)
 // returns how many byte there is up to the first cflow instruction
 int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
-int dump_hook(unsigned char* patch, mdata_binary_t* s_binary);
+int dump_hook(uint8_t* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
 uint64_t craft_hook(mdata_binary_t* s_binary);
-int restore_hook(unsigned char* patch, mdata_binary_t* s_binary);
+int restore_hook(uint8_t* patch, mdata_binary_t* s_binary);
 
 int instrument(mdata_binary_t* s_binary);
 uint64_t _instrument(mdata_binary_t* s_binary, hook_t* hook);
 
-uint64_t eval_target(unsigned char* instruction, mdata_binary_t* s_binary);
+uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary);
 void _dispatcher(mdata_binary_t* s_binary);
 
 void alloc_state(mdata_binary_t* s_binary);

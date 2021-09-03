@@ -13,11 +13,11 @@
 #include "../include/dryadalis_x86.h"
 
 // is elf ?
-_Bool is_elf(unsigned char *eh_ptr) {
-    if ((unsigned char)eh_ptr[EI_MAG0] != 0x7F ||
-        (unsigned char)eh_ptr[EI_MAG1] != 'E' ||
-        (unsigned char)eh_ptr[EI_MAG2] != 'L' || 
-        (unsigned char)eh_ptr[EI_MAG3] != 'F') {
+_Bool is_elf(uint8_t *eh_ptr) {
+    if ((uint8_t)eh_ptr[EI_MAG0] != 0x7F ||
+        (uint8_t)eh_ptr[EI_MAG1] != 'E' ||
+        (uint8_t)eh_ptr[EI_MAG2] != 'L' || 
+        (uint8_t)eh_ptr[EI_MAG3] != 'F') {
         return false;
     }
 

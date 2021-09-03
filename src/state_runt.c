@@ -215,7 +215,7 @@ uint64_t read_reg(int key, hashmap_t* hashmap) {
     return -1;
 }
 
-void prnt_large(unsigned char* integer, int count) {
+void prnt_large(uint8_t* integer, int count) {
     int64_t *iter = calloc(1, count *  sizeof(int64_t));
     memcpy(iter, integer, count *  sizeof(int64_t));
 
@@ -234,11 +234,11 @@ void prnt_large(unsigned char* integer, int count) {
 }
 
 void prnt_uint128(__m128i integer) {
-    prnt_large((unsigned char* )&integer, sizeof(integer) / sizeof(int64_t));
+    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t));
 }
 
 void prnt_uint256(__m256i integer) {
-    prnt_large((unsigned char* )&integer, sizeof(integer) / sizeof(int64_t));
+    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t));
 }
 
 void log_sse(state_rtime_t* state) {
