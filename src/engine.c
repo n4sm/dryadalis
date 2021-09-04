@@ -41,7 +41,7 @@ int arch_prctl(int func, void *ptr) {
 }
 
 void default_dtor(void) {
-    // fprintf(stdout, "End of the program !\n");
+    fprintf(stdout, "End of the program !\n");
     exit(0);
 }
 
@@ -119,7 +119,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
         }
 
         if (DEBUG) {
-            fprintf(stdout, "%s %s\n", insn->mnemonic, insn->op_str);
+            fprintf(stdout, "0x%lx\t%s %s\n", insn->address, insn->mnemonic, insn->op_str);
         }
         
         for (size_t i = 0; i < insn->detail->groups_count; i++) {
@@ -136,7 +136,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
     if (is_mapped((addr), s_binary) && addr != saved_addr) {
         // if the page next to the current page is mapped we call opcode_cflow onto it
         if (DEBUG) {
-            // fprintf(stdout, "recurr call, size: %lx, addr: %lx\n", size, addr-insn->size);
+            fprintf(stdout, "recurr call, size: %lx, addr: %lx\n", size, addr-insn->size);
         }
         
         cs_free(insn, 1);
@@ -383,19 +383,19 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
                                             mov rax, %p;\
                                             vmovups [rax], ymm8;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm9;\
+                                            vmovups [rax], ymm9;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm10;\
+                                            vmovups [rax], ymm10;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm11;\
+                                            vmovups [rax], ymm11;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm12;\
+                                            vmovups [rax], ymm12;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm13;\
+                                            vmovups [rax], ymm13;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm14;\
+                                            vmovups [rax], ymm14;\
                                             mov rax, %p;\
-                                            vmovups [rax], xmm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                            vmovups [rax], ymm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
                                                                         &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
@@ -600,78 +600,109 @@ int host_save_state(state_rtime_t* state) {
 
 // =-=-=-=-=--
 
-_Bool parse_request(mdata_binary_t* s_binary, request_t* request) {
+_Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_bbl) {
     switch (request->type) {
-    case INSTRUMENT_ADDR:
-        return ((request->address >= s_binary->dbi_handler->state->rip) && (request->address < s_binary->dbi_handler->dump->jmp)) ? true : false;
+        case INSTRUMENT_ADDR:
+            return ((request->address >= base_bbl) && (request->address < s_binary->dbi_handler->dump->jmp)) ? true : false;
 
-    case INSTRUMENT_BBL:
-        return true;
-    
-    default:
-        return false;
+        case INSTRUMENT_BBL:
+            return false;
+        
+        default:
+            return false;
     }
+}
+
+int set_dump_hook(mdata_binary_t* s_binary) {
+    s_binary->dbi_handler->dump->code = calloc(1, 256);
+    ssize_t size_trampoline = (ssize_t)dump_hook(s_binary->dbi_handler->dump->code, s_binary);
+    if (-1 == size_trampoline) {
+        fprintf(stderr, "FATAL set_dump_hook\n");
+        return -1;
+    }
+    if (!(s_binary->dbi_handler->dump->code = realloc(s_binary->dbi_handler->dump->code, size_trampoline+1))) {
+        fprintf(stderr, "FATAL set_dump_hook\n");
+        return -1;
+    }
+    s_binary->dbi_handler->dump->length = size_trampoline;
+    s_binary->dbi_handler->dump->jmp = 0x0; // no hook for now
+
+    return 0;
+}
+
+int set_restore_hook(mdata_binary_t* s_binary) {
+    s_binary->dbi_handler->restore->code = calloc(1, 256);
+    ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
+    if (-1 == size_trampoline_restore) {
+        fprintf(stderr, "FATAL set_restore_hook\n");
+        return -1;
+    }
+    if (!(s_binary->dbi_handler->restore->code = realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore))) {
+        fprintf(stderr, "FATAL set_restore_hook\n");
+        return -1;
+    }
+    s_binary->dbi_handler->restore->length = size_trampoline_restore;
+
+    return 0;
+}
+
+// it writes the dump hook and sets the right mode (INSTRUMENT_ADDR / INSTRUMENT_BBL) 
+int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) {
+    *(s_binary->dbi_handler->curr_hook) = base_bbl + _instrument_bbl(s_binary, s_binary->dbi_handler->dump, base_bbl);
+
+    if ((s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request, base_bbl))) {
+        if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
+            fprintf(stderr, "FATAL restore_bytes # dump\n");
+            exit(-1);
+        }
+        s_binary->dbi_handler->dump->to_unmap = 0x0;
+
+        s_binary->dbi_handler->dump->jmp = s_binary->dbi_handler->request->address;
+        if (-1 == write_hook(s_binary, s_binary->dbi_handler->dump)) {
+            fprintf(stderr, "FATAL instrument_request\n");
+            return -1;
+        }
+
+        s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_ADDR;
+    } else {
+        s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_BBL;
+    }
+
+    return 0;
 }
 
 // main instrumentation abstraction
 int instrument(mdata_binary_t* s_binary) {
-    uint64_t entry = (uint64_t)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
     s_binary->dbi_handler->curr_hook = calloc(1, sizeof(uint64_t));
     s_binary->dbi_handler->host_rsp = (uint64_t* )((map_stack()));
     s_binary->dispatcher = (uint64_t)_dispatcher;
-
-    if (DEBUG) {
-        // fprintf(stdout, "e_entry: %lx\n", entry);
-    }
-
-    if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
-        return -1;
-    }
-
-    s_binary->dbi_handler->dump->code = calloc(1, 256);
-    ssize_t size_trampoline = (ssize_t)dump_hook(s_binary->dbi_handler->dump->code, s_binary);
-    if (-1 == size_trampoline) {
-        return -1;
-    }
-    if (!(s_binary->dbi_handler->dump->code = realloc(s_binary->dbi_handler->dump->code, size_trampoline+1))) {
-        exit(-1);
-    }
-    s_binary->dbi_handler->dump->length = size_trampoline;
-    s_binary->dbi_handler->dump->jmp = entry;
-    // main hook trampoline
-
-    // restore hook trampoline
-    // ============================================
-    s_binary->dbi_handler->restore->code = calloc(1, 256);
-    ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
-    if (-1 == size_trampoline_restore) {
-        return -1;
-    }
-    if (!(s_binary->dbi_handler->restore->code = realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore))) {
-        exit(-1);
-    }
-    s_binary->dbi_handler->restore->length = size_trampoline_restore;
-    // ============================
-
     s_binary->dbi_handler->u_handler = s_binary->dbi_handler->request->callback;
 
-    s_binary->dbi_handler->dump->jmp = entry; // it means we begin to analyse @ entry and 
-    *(s_binary->dbi_handler->curr_hook) = _instrument(s_binary, // here the field is updated to target the right cflow instruction 
-                                                      s_binary->dbi_handler->dump); // which is rewritten by the hook
+    if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
+        exit(-1);
+    } else if (-1 == set_dump_hook(s_binary)) {
+        exit(-1);
+    } else if (-1 == set_restore_hook(s_binary)) {
+        exit(-1);
+    }
 
-    s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request);
+    if (-1 == instrument_request(s_binary, s_binary->exec_entry)) {
+        exit(-1);
+    }
 
-    //host_save_state(s_binary->dbi_handler->host_state);
     if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {
         exit(-1);
     } else if (s_binary->dbi_handler->instrumented_fs && (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs))) {
         exit(-1);
     }
+
+    s_binary->dbi_handler->state->rip = s_binary->exec_entry;
+
+    // rsp is already set in the mapper
     exec_binary(s_binary);
     // no return
     return 0;
 }
-
 
 // write hook->code to hook->jmp saving orginal bytes in hook->orig_bytes
 int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
@@ -716,23 +747,22 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook) {
     return 0;
 }
 
-// internal part, returns the offset right after the cflow instruction
-uint64_t _instrument(mdata_binary_t* s_binary, hook_t* hook) {
-    off_t off_cflow = opcodes_cflow(hook->jmp, s_binary, true);
+// internal part, returns the offset right after the cflow instruction, updates automatically hook->jmp
+uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) {
+    off_t off_cflow = opcodes_cflow(base, s_binary, true);
 
     if (-1 == off_cflow) {
         fprintf(stderr, "FATAL opcodes_cflow\n");
         return -1;
     }
 
-    hook->jmp += off_cflow;
-
-    s_binary->dbi_handler->length_cflow = insn_len(hook->jmp, s_binary);
+    s_binary->dbi_handler->dump->jmp = base + off_cflow;
+    s_binary->dbi_handler->length_cflow = insn_len(base + off_cflow, s_binary);
     if (write_hook(s_binary, hook)) {
         return -1;
     }
 
-    return hook->jmp;
+    return off_cflow;
 }
 
 // restore the hook->orig_bytes at hook->curr_hook
@@ -765,6 +795,20 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
     return 0;
 }
 
+uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) {
+    uint64_t target = eval_target(addr, s_binary);
+    if (-1 == target) {
+        fprintf(stderr, "FATAL eval_target \n");
+        exit(-1);
+    }
+
+    if (DEBUG) {
+        fprintf(stdout, "cflow target: 0x%lx\n", target);
+    }
+
+    return target;
+}
+
 void _dispatcher(mdata_binary_t* s_binary) {
     if (-1 == set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
         fprintf(stderr, "FATAL arch_prctl\n");
@@ -790,34 +834,24 @@ void _dispatcher(mdata_binary_t* s_binary) {
     s_binary->dbi_handler->dump->to_unmap = 0x0;
 
     if (DEBUG) {
-        // fprintf(stdout, " = * = [ . ] = * =\n");
+        fprintf(stdout, ".\n");
     }
 
-    uint64_t target = eval_target((void* )*(s_binary->dbi_handler->curr_hook), s_binary);
-    if (-1 == target) {
-        fprintf(stderr, "FATAL eval_target \n");
+    // either that's a hook into a basic block and so the begin of the analysis routine is @ the address of the dump_hook else we emulate the jmp instruction
+    uint64_t base_bbl = s_binary->dbi_handler->curr_instr_mode == INSTRUMENT_ADDR ? *s_binary->dbi_handler->curr_hook : br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+
+    if (-1 == instrument_request(s_binary, base_bbl)) {
+        fprintf(stderr, "FATAL _instrument_bbl # dump hook\n");
         exit(-1);
     }
-
-    if (DEBUG) {
-        // fprintf(stdout, "cflow target: 0x%lx\n", target);
-    }
-
-    s_binary->dbi_handler->dump->jmp = target;
-    if (-1 == _instrument(s_binary, s_binary->dbi_handler->dump)) {
-        fprintf(stderr, "FATAL _instrument # dump hook\n");
-        exit(-1);
-    }
-
-    s_binary->dbi_handler->restore->jmp = target - s_binary->dbi_handler->restore->length;
+    
+    s_binary->dbi_handler->restore->jmp = base_bbl - s_binary->dbi_handler->restore->length;
     if (-1 == write_hook(s_binary, s_binary->dbi_handler->restore)) {
         fprintf(stderr, "FATAL write_hook # restore\n");
         exit(-1);
     }
 
-    s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request);
-
-    s_binary->dbi_handler->state->rip = target - s_binary->dbi_handler->restore->length;
+    s_binary->dbi_handler->state->rip = base_bbl - s_binary->dbi_handler->restore->length;
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
 
     fflush(stdout);
@@ -833,7 +867,7 @@ _Bool is_test(uint64_t cs_eflags) {
 // return true if the target flag is set in @eflags
 _Bool is_set(mdata_binary_t* s_binary, int flag) {
     if (DEBUG) {
-        // fprintf(stdout, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
+        fprintf(stdout, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
     }
 
     uint64_t eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
@@ -904,8 +938,6 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
     }
 }
 
-// ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF) >> SF) != ((read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF) >> F)
-
 long sign_extend(size_t size, uint64_t value) {
     return (((value & (1 << ((size*8) - 1))) << (63-(size-1))) | ((value & ~(0 << ((size*8)-1)))));
 }
@@ -921,7 +953,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                 cs_x86_op* operand = &(x86->operands[0]);
 
                 if (DEBUG) {
-                    // fprintf(stdout, " taken ");
+                    fprintf(stdout, " taken ");
                 }
 
                 if (is_call(details->groups[i]) && !achieve) {
@@ -929,7 +961,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     s_binary->dbi_handler->state->rsp -= 8;
 
                     if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
-                        // fprintf(stdout, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
+                        fprintf(stdout, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
                         return -1;
                     }
 
@@ -954,12 +986,12 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
 
                         if (-1 != base && -1 != index) {
                             if (operand->mem.base == X86_REG_RIP) {
-                                // fprintf(stdout, "rip: %lx", base);
+                                fprintf(stdout, "rip: %lx", base);
                                 base += insn->size;
                             }
 
                             if (DEBUG) {
-                                // fprintf(stdout, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
+                                fprintf(stdout, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
                             }
 
                             return *((uint64_t* )(base + index * operand->mem.scale + operand->mem.disp));
@@ -975,7 +1007,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
             } else {
                 // jmp not taken
                 if (DEBUG) {
-                    // fprintf(stdout, " not taken ");
+                    fprintf(stdout, " not taken ");
                 }
 
                 return (uint64_t)(instruction + insn->size);

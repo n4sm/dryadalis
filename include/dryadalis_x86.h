@@ -232,6 +232,7 @@ typedef struct dbi_instr_s {
     uint64_t instrumented_gs;
     int64_t length_cflow;
     request_t* request;
+    int8_t curr_instr_mode;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
@@ -254,6 +255,7 @@ typedef struct mdata_binary_s {
     mem_map_t* memory_map;
     uint64_t dispatcher;
     dbi_instr_t* dbi_handler;
+    uint64_t exec_entry;
 } mdata_binary_t;
 
 typedef uint64_t (*hook_syscall) (mdata_binary_t* s_binary);
@@ -330,7 +332,7 @@ uint64_t craft_hook(mdata_binary_t* s_binary);
 int restore_hook(uint8_t* patch, mdata_binary_t* s_binary);
 
 int instrument(mdata_binary_t* s_binary);
-uint64_t _instrument(mdata_binary_t* s_binary, hook_t* hook);
+uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base);
 
 uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary);
 void _dispatcher(mdata_binary_t* s_binary);

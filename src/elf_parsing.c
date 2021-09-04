@@ -202,6 +202,8 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->dtor = default_dtor;
     s_binary->dbi_handler->length_cflow = 0x0;
 
+    s_binary->exec_entry = 0x0;
+
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
         return (mdata_binary_t* )-1;
