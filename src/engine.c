@@ -80,6 +80,20 @@ _Bool is_endbr64(uint8_t* s) {
     return !memcmp(s, "\xf3\x0f\x1e\xfa", 4);
 }
 
+//==
+
+uint64_t mxcsr;
+
+void save_mxcsr() {
+    mxcsr = _mm_getcsr();
+}
+
+void restore_mxcsr() {
+    _mm_setcsr(mxcsr);
+}
+
+//==
+
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
 int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
     csh handle;
@@ -265,51 +279,53 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
     }
 
     s_binary->dbi_handler->dump_stub = encode;
-    sprintf(insns, "         mov rax, rsp;\
-                             movabs [%p], rax; \
-                             mov rsp, 0x%lx;\
-            pushfq; pop rax; movabs [%p], rax; \
-                             mov rax, rbx;\
-                             movabs [%p], rax; \
-                             mov rax, rcx;\
-                             movabs [%p], rax; \
-                             mov rax, rdx;\
-                             movabs [%p], rax; \
-                             mov rax, rsi;\
-                             movabs [%p], rax; \
-                             mov rax, rdi;\
-                             movabs [%p], rax; \
-                             mov rax, rbp;\
-                             movabs [%p], rax; \
-                mov rax, es; movabs [%p], rax; \
-                mov rax, gs; movabs [%p], rax; \
-                mov rax, fs; movabs [%p], rax; \
-                mov rax, cs; movabs [%p], rax; \
-                mov rax, ss; movabs [%p], rax; \
-                mov rax, ds; movabs [%p], rax; \
-                             mov rax, r8;\
-                             movabs [%p], rax; \
-                             mov rax, r9;\
-                             movabs [%p], rax; \
-                             mov rax, r10;\
-                             movabs [%p], rax; \
-                             mov rax, r11;\
-                             movabs [%p], rax; \
-                             mov rax, r12;\
-                             movabs [%p], rax; \
-                             mov rax, r13;\
-                             movabs [%p], rax; \
-                             mov rax, r14;\
-                             movabs [%p], rax; \
-                             mov rax, r15;\
-                             movabs [%p], rax;", &(s_binary->dbi_handler->state->rsp), (uint64_t)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
-                                                           &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
-                                                           &(s_binary->dbi_handler->state->rbp), \
-                                                           &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
-                                                           &(s_binary->dbi_handler->state->fs), &(s_binary->dbi_handler->state->cs), &(s_binary->dbi_handler->state->ss), \
-                                                           &(s_binary->dbi_handler->state->ds), &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), \
-                                                           &(s_binary->dbi_handler->state->r10), &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), \
-                                                           &(s_binary->dbi_handler->state->r13), &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
+
+    sprintf(insns, "    mov rax, rsp;\
+                                        movabs [%p], rax; \
+                                        mov rsp, 0x%lx;\
+                        pushfq; pop rax; movabs [%p], rax; \
+                                        mov rax, rbx;\
+                                        movabs [%p], rax; \
+                                        mov rax, rcx;\
+                                        movabs [%p], rax; \
+                                        mov rax, rdx;\
+                                        movabs [%p], rax; \
+                                        mov rax, rsi;\
+                                        movabs [%p], rax; \
+                                        mov rax, rdi;\
+                                        movabs [%p], rax; \
+                                        mov rax, rbp;\
+                                        movabs [%p], rax; \
+                            mov rax, es; movabs [%p], rax; \
+                            mov rax, gs; movabs [%p], rax; \
+                            mov rax, fs; movabs [%p], rax; \
+                            mov rax, cs; movabs [%p], rax; \
+                            mov rax, ss; movabs [%p], rax; \
+                            mov rax, ds; movabs [%p], rax; \
+                                        mov rax, r8;\
+                                        movabs [%p], rax; \
+                                        mov rax, r9;\
+                                        movabs [%p], rax; \
+                                        mov rax, r10;\
+                                        movabs [%p], rax; \
+                                        mov rax, r11;\
+                                        movabs [%p], rax; \
+                                        mov rax, r12;\
+                                        movabs [%p], rax; \
+                                        mov rax, r13;\
+                                        movabs [%p], rax; \
+                                        mov rax, r14;\
+                                        movabs [%p], rax; \
+                                        mov rax, r15;\
+                                        movabs [%p], rax;",         &(s_binary->dbi_handler->state->rsp), (uint64_t)(s_binary->dbi_handler->host_rsp), &(s_binary->dbi_handler->state->rflags), &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), \
+                                                                    &(s_binary->dbi_handler->state->rdx), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rdi), \
+                                                                    &(s_binary->dbi_handler->state->rbp), \
+                                                                    &(s_binary->dbi_handler->state->es), &(s_binary->dbi_handler->state->gs), \
+                                                                    &(s_binary->dbi_handler->state->fs), &(s_binary->dbi_handler->state->cs), &(s_binary->dbi_handler->state->ss), \
+                                                                    &(s_binary->dbi_handler->state->ds), &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), \
+                                                                    &(s_binary->dbi_handler->state->r10), &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), \
+                                                                    &(s_binary->dbi_handler->state->r13), &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
+
 
     if (s_binary->dbi_handler->state->sse) {
         sprintf(insns + strlen(insns), "    mov rax, %p;\
@@ -358,13 +374,15 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
                                             movaps [rax], xmm0;\
                                             mov rax, %p;\
                                             movaps xmm0, xmm15;\
-                                            movaps [rax], xmm0;",      &(s_binary->dbi_handler->state->sse->xmm0), &(s_binary->dbi_handler->state->sse->xmm1), &(s_binary->dbi_handler->state->sse->xmm2),\
+                                            movaps [rax], xmm0;",       &(s_binary->dbi_handler->state->sse->xmm0), &(s_binary->dbi_handler->state->sse->xmm1), &(s_binary->dbi_handler->state->sse->xmm2),\
                                                                         &(s_binary->dbi_handler->state->sse->xmm3), &(s_binary->dbi_handler->state->sse->xmm4), &(s_binary->dbi_handler->state->sse->xmm5), \
                                                                         &(s_binary->dbi_handler->state->sse->xmm6), &(s_binary->dbi_handler->state->sse->xmm7), &(s_binary->dbi_handler->state->sse->xmm8), \
                                                                         &(s_binary->dbi_handler->state->sse->xmm9), &(s_binary->dbi_handler->state->sse->xmm10), &(s_binary->dbi_handler->state->sse->xmm11), \
                                                                         &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
     } else if (s_binary->dbi_handler->state->avx2) {
-        sprintf(insns + strlen(insns), "    mov rax, %p;\
+        sprintf(insns + strlen(insns), "    mov rax, 0x%lx;\
+                                            call rax;\
+                                            mov rax, %p;\
                                             vmovups [rax], ymm0;\
                                             mov rax, %p;\
                                             vmovups [rax], ymm1;\
@@ -395,7 +413,8 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
                                             mov rax, %p;\
                                             vmovups [rax], ymm14;\
                                             mov rax, %p;\
-                                            vmovups [rax], ymm15;",   &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                            vmovups [rax], ymm15;",     (uint64_t)save_mxcsr, 
+                                                                        &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
                                                                         &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
                                                                         &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
@@ -403,7 +422,7 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
     } else if (s_binary->dbi_handler->state->avx512) {
         fprintf(stderr, "FATAL avx512 isn't supported for now\n");
         return -1;
-    }
+    }        
 
     sprintf(insns + strlen(insns), "mov rdi, 0x%lx; \
                                     mov rax, 0x%lx; \
@@ -444,46 +463,8 @@ uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
 
     s_binary->dbi_handler->restore_stub = (uint8_t* )STUB_ADDR_RESTORE;
 
-    sprintf(insns, "            movabs rax, [%p]; \
-                                mov rbx, rax;   \
-                                movabs rax, [%p]; \
-                                mov rcx, rax; \
-                                movabs rax, [%p]; \
-                                mov rdx, rax; \
-                                movabs rax, [%p]; \
-                                mov rdi, rax; \
-                                movabs rax, [%p]; \
-                                mov rsi, rax; \
-                                movabs rax, [%p]; \
-                                mov rbp, rax; \
-                movabs rax, [%p]; mov es, rax; \
-                movabs rax, [%p]; mov ss, rax; \
-                movabs rax, [%p]; mov ds, rax; \
-                                movabs rax, [%p]; \
-                                mov r8, rax; \
-                                movabs rax, [%p]; \
-                                mov r9, rax; \
-                                movabs rax, [%p]; \
-                                mov r10, rax; \
-                                movabs rax, [%p]; \
-                                mov r11, rax; \
-                                movabs rax, [%p]; \
-                                mov r12, rax; \
-                                movabs rax, [%p]; \
-                                mov r13, rax; \
-                                movabs rax, [%p]; \
-                                mov r14, rax; \
-                                movabs rax, [%p]; \
-                                mov r15, rax;", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
-                                                            &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
-                                                            &(s_binary->dbi_handler->state->es), \
-                                                            &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
-                                                            &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
-                                                            &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
-                                                            &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
-
     if (s_binary->dbi_handler->state->sse) {
-        sprintf(insns + strlen(insns),     "mov rax, %p;\
+        sprintf(insns,                     "mov rax, %p;\
                                             movaps xmm0, [rax];\
                                             mov rax, %p;\
                                             movaps xmm1, [rax];\
@@ -520,7 +501,7 @@ uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
                                                                     &(s_binary->dbi_handler->state->sse->xmm9), &(s_binary->dbi_handler->state->sse->xmm10), &(s_binary->dbi_handler->state->sse->xmm11), \
                                                                     &(s_binary->dbi_handler->state->sse->xmm12), &(s_binary->dbi_handler->state->sse->xmm13), &(s_binary->dbi_handler->state->sse->xmm14), &(s_binary->dbi_handler->state->sse->xmm15));
     } else if (s_binary->dbi_handler->state->avx2) {
-        sprintf(insns + strlen(insns),     "mov rax, %p;\
+        sprintf(insns,     "                mov rax, %p;\
                                             vmovups ymm0, [rax];\
                                             mov rax, %p;\
                                             vmovups ymm1, [rax];\
@@ -551,15 +532,55 @@ uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
                                             mov rax, %p;\
                                             vmovups ymm14, [rax];\
                                             mov rax, %p;\
-                                            vmovups ymm15, [rax];",  &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
+                                            vmovups ymm15, [rax];\
+                                            mov rax, 0x%lx;\
+                                            call rax;",  &(s_binary->dbi_handler->state->avx2->ymm0), &(s_binary->dbi_handler->state->avx2->ymm1), &(s_binary->dbi_handler->state->avx2->ymm2),\
                                                                      &(s_binary->dbi_handler->state->avx2->ymm3), &(s_binary->dbi_handler->state->avx2->ymm4), &(s_binary->dbi_handler->state->avx2->ymm5), \
                                                                      &(s_binary->dbi_handler->state->avx2->ymm6), &(s_binary->dbi_handler->state->avx2->ymm7), &(s_binary->dbi_handler->state->avx2->ymm8), \
                                                                      &(s_binary->dbi_handler->state->avx2->ymm9), &(s_binary->dbi_handler->state->avx2->ymm10), &(s_binary->dbi_handler->state->avx2->ymm11), \
-                                                                     &(s_binary->dbi_handler->state->avx2->ymm12), &(s_binary->dbi_handler->state->avx2->ymm13), &(s_binary->dbi_handler->state->avx2->ymm14), &(s_binary->dbi_handler->state->avx2->ymm15));
+                                                                     &(s_binary->dbi_handler->state->avx2->ymm12), &(s_binary->dbi_handler->state->avx2->ymm13), &(s_binary->dbi_handler->state->avx2->ymm14), &(s_binary->dbi_handler->state->avx2->ymm15), (uint64_t)restore_mxcsr);
     } else if (s_binary->dbi_handler->state->avx512) {
         fprintf(stderr, "FATAL avx512 isn't supported for now\n");
         return -1;
     }
+
+    sprintf(insns + strlen(insns), "    movabs rax, [%p]; \
+                                        mov rbx, rax;   \
+                                        movabs rax, [%p]; \
+                                        mov rcx, rax; \
+                                        movabs rax, [%p]; \
+                                        mov rdx, rax; \
+                                        movabs rax, [%p]; \
+                                        mov rdi, rax; \
+                                        movabs rax, [%p]; \
+                                        mov rsi, rax; \
+                                        movabs rax, [%p]; \
+                                        mov rbp, rax; \
+                        movabs rax, [%p]; mov es, rax; \
+                        movabs rax, [%p]; mov ss, rax; \
+                        movabs rax, [%p]; mov ds, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r8, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r9, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r10, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r11, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r12, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r13, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r14, rax; \
+                                        movabs rax, [%p]; \
+                                        mov r15, rax;", &(s_binary->dbi_handler->state->rbx), &(s_binary->dbi_handler->state->rcx), &(s_binary->dbi_handler->state->rdx), \
+                                                                    &(s_binary->dbi_handler->state->rdi), &(s_binary->dbi_handler->state->rsi), &(s_binary->dbi_handler->state->rbp), \
+                                                                    &(s_binary->dbi_handler->state->es), \
+                                                                    &(s_binary->dbi_handler->state->ss), &(s_binary->dbi_handler->state->ds), \
+                                                                    &(s_binary->dbi_handler->state->r8), &(s_binary->dbi_handler->state->r9), &(s_binary->dbi_handler->state->r10), \
+                                                                    &(s_binary->dbi_handler->state->r11), &(s_binary->dbi_handler->state->r12), &(s_binary->dbi_handler->state->r13), \
+                                                                    &(s_binary->dbi_handler->state->r14), &(s_binary->dbi_handler->state->r15));
 
     sprintf(insns + strlen(insns), "movabs rax, [%p]; push rax; \
                                     movabs rax, [%p]; push rax; \
@@ -603,7 +624,7 @@ int host_save_state(state_rtime_t* state) {
 _Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_bbl) {
     switch (request->type) {
         case INSTRUMENT_ADDR:
-            return ((request->address >= base_bbl) && (request->address < s_binary->dbi_handler->dump->jmp)) ? true : false;
+            return ((request->address >= base_bbl) && (request->address <= s_binary->dbi_handler->dump->jmp)) ? true : false;
 
         case INSTRUMENT_BBL:
             return false;
@@ -666,6 +687,12 @@ int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) {
         s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_ADDR;
     } else {
         s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_BBL;
+    }
+
+    s_binary->dbi_handler->restore->jmp = base_bbl - s_binary->dbi_handler->restore->length;
+    if (-1 == write_hook(s_binary, s_binary->dbi_handler->restore)) {
+        fprintf(stderr, "FATAL write_hook # restore\n");
+        exit(-1);
     }
 
     return 0;
@@ -796,7 +823,7 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
 }
 
 uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) {
-    uint64_t target = eval_target(addr, s_binary);
+    uint64_t target = eval_target((uint8_t* )addr, s_binary);
     if (-1 == target) {
         fprintf(stderr, "FATAL eval_target \n");
         exit(-1);
@@ -807,6 +834,25 @@ uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) {
     }
 
     return target;
+}
+
+uint64_t _get_bbl_base(mdata_binary_t* s_binary) {
+    switch (s_binary->dbi_handler->curr_instr_mode) {
+        case INSTRUMENT_BBL:
+            return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+
+        case INSTRUMENT_ADDR:
+            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, false)) {
+                // we check if that's the end of a basic block if so we emulate the br instruction
+                return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+            } else {
+                // else we're in a basic block so the begin of the new bbl the right after the last executed instruction 
+                return *s_binary->dbi_handler->curr_hook;
+            }
+
+        default:
+            return -1;
+    }
 }
 
 void _dispatcher(mdata_binary_t* s_binary) {
@@ -837,17 +883,14 @@ void _dispatcher(mdata_binary_t* s_binary) {
         fprintf(stdout, ".\n");
     }
 
-    // either that's a hook into a basic block and so the begin of the analysis routine is @ the address of the dump_hook else we emulate the jmp instruction
-    uint64_t base_bbl = s_binary->dbi_handler->curr_instr_mode == INSTRUMENT_ADDR ? *s_binary->dbi_handler->curr_hook : br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+    uint64_t base_bbl = _get_bbl_base(s_binary);
+    if (-1 == base_bbl) {
+        fprintf(stderr, "FATAL _get_bbl_base\n");
+        exit(-1);
+    }
 
     if (-1 == instrument_request(s_binary, base_bbl)) {
         fprintf(stderr, "FATAL _instrument_bbl # dump hook\n");
-        exit(-1);
-    }
-    
-    s_binary->dbi_handler->restore->jmp = base_bbl - s_binary->dbi_handler->restore->length;
-    if (-1 == write_hook(s_binary, s_binary->dbi_handler->restore)) {
-        fprintf(stderr, "FATAL write_hook # restore\n");
         exit(-1);
     }
 

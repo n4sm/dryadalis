@@ -22,6 +22,7 @@ int test(void* s_binary) {
 
     // log_avx2(((mdata_binary_t* )s_binary)->dbi_handler->state);
     // log_regs(s_binary);
+    fprintf(stdout, "test\n");
     return 0;
 }
 
@@ -35,6 +36,7 @@ int main(int argc, char **argv) {
 
     merge_address_space(s_binary);
     log_map(s_binary->memory_map);
+    // req.address += (uint64_t)s_binary->interp->base;
     s_binary->dbi_handler->request = &req;
     instrument(s_binary);
     return 0;

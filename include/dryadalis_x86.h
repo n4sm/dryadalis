@@ -347,6 +347,7 @@ int arch_prctl(int func, void *ptr);
 int set_fs_gs(void* fs, void* gs);
 _Bool is_set(mdata_binary_t* s_binary, int flag);
 _Bool is_jmp_taken(int id, mdata_binary_t* s_binary);
+uint64_t _get_bbl_base(mdata_binary_t* s_binary);
 
 void default_dtor(void);
 int set_fs_gs(void* fs, void* gs);
