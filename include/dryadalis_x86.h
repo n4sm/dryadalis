@@ -34,11 +34,25 @@
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0x50000
-#define DEBUG true 
+#define DEBUG false 
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1
-#define INSTRUMENT_INSTR 0x2
+#define INSTRUMENT_ADDR_ONLY 0x2
+#define INSTRUMEN_PERSISTENT_HOOK 0x3
+
+
+#define PERSISTENT_NOT_SET 0x0
+#define PERSISTENT_FIND_SPACE 0x4
+
+#define PERSISTENT_SET_ORIG_HOOK 0x5
+#define PERSISTENT_SET_BR_HOOK 0x6
+
+#define WRITE_HOOK_RAW 0x0
+#define WRITE_HOOK_FULL 0x1
+
+#define OPCODES_CFLOW_RAW 0x0
+#define OPCODES_CFLOW_FULL 0x1
 
 // eflags
 
@@ -134,38 +148,38 @@ typedef struct avx2_s {
 } __attribute__((aligned(32))) avx2_t;
 
 typedef struct avx512_s {
-    __m512i zmm0;
-    __m512i zmm2;
-    __m512i zmm3;
-    __m512i zmm4;
-    __m512i zmm5;
-    __m512i zmm6;
-    __m512i zmm7;
-    __m512i zmm8;
-    __m512i zmm9;
-    __m512i zmm10;
-    __m512i zmm11;
-    __m512i zmm12;
-    __m512i zmm13;
-    __m512i zmm14;
-    __m512i zmm15;
-    __m512i zmm16;
-    __m512i zmm17;
-    __m512i zmm18;
-    __m512i zmm19;
-    __m512i zmm20;
-    __m512i zmm21;
-    __m512i zmm22;
-    __m512i zmm23;
-    __m512i zmm24;
-    __m512i zmm25;
-    __m512i zmm26;
-    __m512i zmm27;
-    __m512i zmm28;
-    __m512i zmm29;
-    __m512i zmm30;
-    __m512i zmm31;
-} avx512_t;
+    __m512i zmm0 __attribute__((aligned(64)));
+    __m512i zmm2 __attribute__((aligned(64)));
+    __m512i zmm3 __attribute__((aligned(64)));
+    __m512i zmm4 __attribute__((aligned(64)));
+    __m512i zmm5 __attribute__((aligned(64)));
+    __m512i zmm6 __attribute__((aligned(64)));
+    __m512i zmm7 __attribute__((aligned(64)));
+    __m512i zmm8 __attribute__((aligned(64)));
+    __m512i zmm9 __attribute__((aligned(64)));
+    __m512i zmm10 __attribute__((aligned(64)));
+    __m512i zmm11 __attribute__((aligned(64)));
+    __m512i zmm12 __attribute__((aligned(64)));
+    __m512i zmm13 __attribute__((aligned(64)));
+    __m512i zmm14 __attribute__((aligned(64)));
+    __m512i zmm15 __attribute__((aligned(64)));
+    __m512i zmm16 __attribute__((aligned(64)));
+    __m512i zmm17 __attribute__((aligned(64)));
+    __m512i zmm18 __attribute__((aligned(64)));
+    __m512i zmm19 __attribute__((aligned(64)));
+    __m512i zmm20 __attribute__((aligned(64)));
+    __m512i zmm21 __attribute__((aligned(64)));
+    __m512i zmm22 __attribute__((aligned(64)));
+    __m512i zmm23 __attribute__((aligned(64)));
+    __m512i zmm24 __attribute__((aligned(64)));
+    __m512i zmm25 __attribute__((aligned(64)));
+    __m512i zmm26 __attribute__((aligned(64)));
+    __m512i zmm27 __attribute__((aligned(64)));
+    __m512i zmm28 __attribute__((aligned(64)));
+    __m512i zmm29 __attribute__((aligned(64)));
+    __m512i zmm30 __attribute__((aligned(64)));
+    __m512i zmm31 __attribute__((aligned(64)));
+} __attribute__((aligned(64))) avx512_t;
 
 typedef struct state_rtime_s {
     uint64_t rax;
@@ -215,6 +229,11 @@ typedef struct hook_s {
     uintptr_t to_unmap;
 } hook_t;
 
+typedef struct persistent_s {
+    int state;
+    uint64_t address;
+} persistent_t;
+
 typedef struct dbi_instr_s {
     _Bool take_callback;
     state_rtime_t* state;
@@ -232,6 +251,7 @@ typedef struct dbi_instr_s {
     uint64_t instrumented_gs;
     int64_t length_cflow;
     request_t* request;
+    persistent_t* persistent_hook;
     int8_t curr_instr_mode;
 } dbi_instr_t;
 
@@ -320,11 +340,12 @@ _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary);
 int prot(uint64_t addr, mdata_binary_t* s_binary);
 uint64_t* map_stack();
 int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
+int update_prot(mdata_binary_t* s_binary, uint64_t addr, int new_prot);
 
 // engine
 
 // returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg);
+int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(uint8_t* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
@@ -335,12 +356,13 @@ int instrument(mdata_binary_t* s_binary);
 uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base);
 
 uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary);
+uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr);
 void _dispatcher(mdata_binary_t* s_binary);
 
 void alloc_state(mdata_binary_t* s_binary);
 void continue_exec(mdata_binary_t* s_binary);
 int restore_bytes(hook_t* hook, mdata_binary_t* s_binary);
-int write_hook(mdata_binary_t* s_binary, hook_t* hook);
+int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt);
 int host_save_state(state_rtime_t* state);
 
 int arch_prctl(int func, void *ptr);
@@ -351,6 +373,7 @@ uint64_t _get_bbl_base(mdata_binary_t* s_binary);
 
 void default_dtor(void);
 int set_fs_gs(void* fs, void* gs);
+void fatal_dump(mdata_binary_t* s_binary);
 
 // state_runt
 

@@ -237,22 +237,34 @@ mem_map_t* mem_desc(uint64_t addr, mdata_binary_t* s_binary) {
         }
     }
 
-    // for (curr = s_binary->memory_map; curr != s_binary->memory_map; curr = (curr->list.next - offsetof(struct list_head, next))) {
-    //     if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
-    //         return curr;
-    //     }
-    // }
-
     return (mem_map_t* )-1;
 }
 
+int remove_pages(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+    
+}
+
 //==
+
+
+// updates the prot of @addr
+// TODO: a memory descriptor can describe many pages so according to the size of the mprotect it can be buggy
+int update_prot(mdata_binary_t* s_binary, uint64_t addr, int new_prot) {
+    mem_map_t* desc = mem_desc(addr, s_binary);
+
+    if ((mem_map_t* )-1 == desc) {
+        return -1;
+    }
+
+    desc->prot = new_prot;
+    return 0;
+}
 
 // returns the prot according to the address
 int prot(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = mem_desc(PAGE_ALIGN(addr), s_binary))) {
         // if the address is not mapped it's not in read write lul
         return -1;
     }
