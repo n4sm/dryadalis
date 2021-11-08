@@ -205,6 +205,7 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->dbi_handler->persistent_hook = calloc(1, sizeof(persistent_t));
 
     s_binary->exec_entry = 0x0;
+    s_binary->debug_stream = stdout;
 
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");

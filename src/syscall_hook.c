@@ -28,17 +28,17 @@
 uint64_t hook_brk(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    // uint64_t _brk_base = syscall(__NR_brk, 0x0);
+    uint64_t _brk_base = syscall(__NR_brk, 0x0);
 
     state->rax = syscall(__NR_brk, state->rdi);
 
     // if (DEBUG) {
-    fprintf(stdout, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
     // }
 
-    // if (!is_mapped(_brk_base, s_binary)) {
-    //     list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND((state->rax - _brk_base)));
-    // }
+    if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
+        list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND((state->rax - _brk_base) + 1));
+    }
 
     return 0;
 }
@@ -111,7 +111,7 @@ uint64_t hook_arch_prctl(mdata_binary_t* s_binary) {
     }
 
     state->rax = try_ret;
-    fprintf(stdout, "[ . ] arch_prctl (%s, %lx) = %ld\n", code_debug, addr, try_ret); // I guess it works
+    fprintf(s_binary->debug_stream, "[ . ] arch_prctl (%s, %lx) = %ld\n", code_debug, addr, try_ret); // I guess it works
 
     return 0;
 }
@@ -123,7 +123,7 @@ uint64_t hook_access(mdata_binary_t* s_binary) {
     int mode = state->rsi;
 
     state->rax = syscall(__NR_access, filename, mode);
-    fprintf(stdout, "[ . ] access (\"%s\", %x) = %ld\n", filename, mode, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] access (\"%s\", %x) = %ld\n", filename, mode, state->rax);
 
     return 0;
 }
@@ -141,10 +141,10 @@ uint64_t hook_mmap(mdata_binary_t* s_binary) {
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
 
     if (-1 != state->rax) {
-        list_add_map(s_binary, prot, state->rax, length);
+        list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
     }
 
-    fprintf(stdout, "[ . ] mmap (%lx, %lx, %x, %x, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %x, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
     return 0;
 }
@@ -220,10 +220,9 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
+    update_prot(s_binary, state->rdi, state->rsi, state->rdx);
+    
     fprintf(stderr, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
-
-    update_prot(s_binary, state->rdi, state->rdx);
-
     return 0;
 }
 
@@ -241,6 +240,8 @@ uint64_t hook_munmap(mdata_binary_t* s_binary) {
 
     state->rax = syscall(__NR_munmap, state->rdi, state->rsi);
     fprintf(stderr, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
 
     return 0;
 }

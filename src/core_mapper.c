@@ -60,7 +60,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         list_add_map(s_binary, 
                 PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
                 (uint64_t)s_binary->base,
-                sz);
+                sz + 1); // fff + 1
     } else {
         curr_map = (uint64_t)(s_binary->pie ? (uint64_t)s_binary->base + s_ph->p_vaddr : (uint64_t)s_ph->p_vaddr);
         if (MAP_FAILED == mmap((void *)PAGE_ALIGN(curr_map), PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))), PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset))) {
@@ -69,22 +69,20 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         list_add_map(s_binary,
                 PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
                 PAGE_ALIGN(curr_map),
-                sz);
+                sz + 1); // fff + 1
     }
 
-    fprintf(stdout, 
+    fprintf(s_binary->debug_stream, 
             "[*] %lx - %lx %lx\n", 
             (uint64_t)(curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base), 
             (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz), 
-            sz);
+            sz + 1); // fff + 1
 
     if (s_ph->p_memsz > s_ph->p_filesz && curr_map) {
         uint64_t map_filesz = curr_map + s_ph->p_filesz;
         uint64_t map_end = PAGE_ROUND(map_filesz);
 
         uint64_t bss_end = PAGE_ROUND((curr_map + s_ph->p_memsz));
-
-        // fprintf(stdout, "[+] %lx - %lx %lx\n", map_filesz, map_end, map_end-map_filesz);
 
         memset((void* )map_filesz,
                0x0,
@@ -94,11 +92,12 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
             if (MAP_FAILED == mmap((void *)map_end+1, PAGE_ROUND((bss_end - map_end)), PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
                 return -1;
             }
-            fprintf(stdout, "[*] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end)));
+            
+            fprintf(s_binary->debug_stream, "[*] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end)));
             list_add_map(s_binary,
                     PROT_READ | PROT_WRITE,
                     map_end+1,
-                    PAGE_ROUND((bss_end - map_end))); 
+                    PAGE_ROUND((bss_end - map_end)) + 1); 
         }
     }
 
@@ -144,7 +143,7 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
 
     s_binary->exec_entry = (uint64_t)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
 
-    fprintf(stdout, "[*] %s mapped\n", s_binary->filename);
+    fprintf(s_binary->debug_stream, "[*] %s mapped\n", s_binary->filename);
     return s_binary;
 }
 
@@ -188,7 +187,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
     // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
     s_binary->dbi_handler->state->rsp = (uint64_t)stack;
-    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ));
+    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ)+1);
 
     stack[0] = argc-1;
     map_val(&iter[1], &stack[1]);
@@ -218,21 +217,20 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 
     add_auxvt(AT_NULL, &iter[idx], &stack[idx], 0x0);
 
-    //fprintf(stdout, "[*] vsdo @ %lx\n", auxvt(&iter[idx], AT_SYSINFO_EHDR));
     return stack;
 }
 
 // *=*=*=*=*=*=*=*=
 
-mem_map_t* mem_desc(uint64_t addr, mdata_binary_t* s_binary) {
+mem_map_t* get_mem_desc(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
-    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
-        return s_binary->memory_map;
-    }
+    // if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
+    //     return s_binary->memory_map;
+    // }
 
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
+        if (curr->addr == PAGE_ALIGN(addr)) {
             return curr;
         }
     }
@@ -249,14 +247,23 @@ int remove_pages(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
 
 // updates the prot of @addr
 // TODO: a memory descriptor can describe many pages so according to the size of the mprotect it can be buggy
-int update_prot(mdata_binary_t* s_binary, uint64_t addr, int new_prot) {
-    mem_map_t* desc = mem_desc(addr, s_binary);
+int update_prot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot) {
+    mem_map_t* _mem_desc = NULL;
 
-    if ((mem_map_t* )-1 == desc) {
-        return -1;
+    if (size % PAGE_SZ || addr % PAGE_SZ) {
+        fprintf(stderr, "Invalid size or addr > @update_prot, size: %lx, addr: %lx\n", size, addr);
+        exit(-1);
     }
 
-    desc->prot = new_prot;
+    for (size_t i = 0; i < size; i += PAGE_SZ) {      
+        if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
+            fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
+            return false;
+        }
+
+        _mem_desc->prot = new_prot;
+    }
+
     return 0;
 }
 
@@ -264,19 +271,19 @@ int update_prot(mdata_binary_t* s_binary, uint64_t addr, int new_prot) {
 int prot(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(PAGE_ALIGN(addr), s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(PAGE_ALIGN(addr), s_binary))) {
         // if the address is not mapped it's not in read write lul
         return -1;
     }
 
-    return mem_descriptor->prot;
+    return mem_descriptor->prot & 0xff;
 }
 
 // is writable
 int is_w(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -288,7 +295,7 @@ int is_w(uint64_t addr, mdata_binary_t* s_binary) {
 int is_r(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -300,7 +307,7 @@ int is_r(uint64_t addr, mdata_binary_t* s_binary) {
 int is_x(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -313,7 +320,7 @@ int is_x(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -324,7 +331,7 @@ _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -335,7 +342,7 @@ _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -349,12 +356,12 @@ _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
-    if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
-        return true;
-    }
+    // if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
+    //     return true;
+    // }
 
     list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr <= addr && (curr->addr + curr->size) >= addr) {
+        if (curr->addr == PAGE_ALIGN(addr)) {
             return true;
         }
     }
@@ -383,36 +390,68 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
     return s_binary->memory_map;
 }
 
-// free all the strcutures mem_map_t that belong to a binary
+// free all the structures mem_map_t that belong to a binary
 int free_memory_map(mem_map_t* memory_map) {
     mem_map_t* curr = NULL;
 
     list_for_each_entry(curr, &(memory_map->list), list) {
-        free(container_of(curr->list.prev, mem_map_t, list));
+        free(container_of(curr, mem_map_t, list));
     }
 
-    free(memory_map->list.next);
+    // free(memory_map->list.next);
 
     return 0;
 } 
 
 // adds a mem_map_t according to the new mapping's arguments
-int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size) {
+int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) {
     mem_map_t* curr = malloc(sizeof(mem_map_t));
     curr->prot = prot;
     curr->addr = addr;
     curr->size = size;
 
+    if (size % PAGE_SZ || addr % PAGE_SZ) {
+        fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
+        exit(-1);
+    }
+
     if (!s_binary->memory_map) {
-        INIT_LIST_HEAD(&(curr->list));
-    } else {
-        list_add(&(curr->list), &(s_binary->memory_map->list));
+            INIT_LIST_HEAD(&(curr->list));
+    } else { 
+        for (size_t i = 0; i < size % PAGE_SZ; i += PAGE_SZ) {
+            curr->addr = addr + i;
+            curr->size = PAGE_SZ;
+            list_add(&(curr->list), &(s_binary->memory_map->list));
+        }
     }
 
     s_binary->memory_map = curr;
     return 0;
 }
 
+//
+int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
+    mem_map_t* _mem_desc = NULL;
+
+    if (size % PAGE_SZ || addr % PAGE_SZ) {
+        fprintf(stderr, "Invalid size or addr > @list_del_map, size: %lx, addr: %lx\n", size, addr);
+        exit(-1);
+    }
+
+    for (size_t i = 0; i < size; i += PAGE_SZ) {      
+        if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
+            fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
+            return false;
+        }
+
+        list_del(&_mem_desc->list);
+        free(_mem_desc);
+    }
+
+    return 0;
+}
+
+// shit
 int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size) {
     mem_map_t* iter = NULL;
 
@@ -422,18 +461,19 @@ int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size)
             return 0;
         }
     }
+
     return -1;
 }
 
 // Prints some mappings
-int log_map(mem_map_t* memory_map) {
+int log_map(mem_map_t* memory_map, int stream) {
     mem_map_t* curr = NULL;
 
     list_for_each_entry(curr, &(memory_map->list), list) {
-        fprintf(stdout, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size, curr->size, curr->prot);
+        fprintf(stream, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size, curr->size, curr->prot);
     }
 
-    fprintf(stdout, "[+] %lx %lx / %lx # %x\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size, curr->prot);
+    fprintf(stream, "[+] %lx %lx / %lx # %x\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size, curr->prot);
 
     return 0;
 }

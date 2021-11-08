@@ -54,6 +54,8 @@
 #define OPCODES_CFLOW_RAW 0x0
 #define OPCODES_CFLOW_FULL 0x1
 
+#define INSTRUCTION_MAX_SZ 16 
+
 // eflags
 
 #define CF (1 << 0)
@@ -276,6 +278,7 @@ typedef struct mdata_binary_s {
     uint64_t dispatcher;
     dbi_instr_t* dbi_handler;
     uint64_t exec_entry;
+    int debug_stream;
 } mdata_binary_t;
 
 typedef uint64_t (*hook_syscall) (mdata_binary_t* s_binary);
@@ -325,11 +328,12 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary);
 uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc);
 void exec_binary(mdata_binary_t* s_binary);
-int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
+int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size);
 int free_memory_map(mem_map_t* memory_map);
-int log_map(mem_map_t* memory_map);
+int log_map(mem_map_t* memory_map, int stream);
 mem_map_t* merge_address_space(mdata_binary_t* s_binary);
-mem_map_t* mem_desc(uint64_t addr, mdata_binary_t* s_binary);
+mem_map_t* get_mem_desc(uint64_t addr, mdata_binary_t* s_binary);
+int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size);
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary);
@@ -340,7 +344,7 @@ _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary);
 int prot(uint64_t addr, mdata_binary_t* s_binary);
 uint64_t* map_stack();
 int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
-int update_prot(mdata_binary_t* s_binary, uint64_t addr, int new_prot);
+int update_prot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot);
 
 // engine
 
@@ -388,10 +392,10 @@ _Bool is_32bits(int reg);
 _Bool is_64bits(int reg);
 uint64_t read_reg(int key, hashmap_t* hashmap);
 
-void log_regs(mdata_binary_t* s_binary);
-void log_general(state_rtime_t* state);
-void log_avx2(state_rtime_t* state);
-void log_sse(state_rtime_t* state);
+void log_regs(mdata_binary_t* s_binary, int stream);
+void log_general(state_rtime_t* state, int stream);
+void log_avx2(state_rtime_t* state, int stream);
+void log_sse(state_rtime_t* state, int stream);
 
 _Bool is_cf(uint64_t eflags);
 _Bool is_pf(uint64_t eflags);
