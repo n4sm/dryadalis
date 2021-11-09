@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include "../include/dryadalis_x86.h"
 
@@ -106,6 +107,8 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         return -1;
     }
 
+    update_prot(s_binary, (uint64_t)(curr_map ? (void *)PAGE_ALIGN(curr_map) : s_binary->base), PAGE_ROUND(s_ph->p_memsz) + 1, PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags));
+
     return 0;
 }
 
@@ -144,6 +147,7 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
     s_binary->exec_entry = (uint64_t)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
 
     fprintf(s_binary->debug_stream, "[*] %s mapped\n", s_binary->filename);
+    merge_address_space(s_binary);
     return s_binary;
 }
 
@@ -223,23 +227,20 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
 // *=*=*=*=*=*=*=*=
 
 mem_map_t* get_mem_desc(uint64_t addr, mdata_binary_t* s_binary) {
-    mem_map_t* curr = NULL;
+    mem_map_t* curr = s_binary->memory_map;
 
-    // if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
-    //     return s_binary->memory_map;
-    // }
+    assert(curr);
 
-    list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr == PAGE_ALIGN(addr)) {
-            return curr;
-        }
-    }
+    do {
+        if (curr->addr == PAGE_ALIGN(addr)) return curr;
+        // printf("%lx != %lx\n", curr->addr, addr);
+        curr = container_of(curr->list.next, mem_map_t, list);
+    } while (curr != s_binary->memory_map);
 
+    fprintf(stderr, "> get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
+
+    assert(curr == s_binary->memory_map);
     return (mem_map_t* )-1;
-}
-
-int remove_pages(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    
 }
 
 //==
@@ -257,7 +258,7 @@ int update_prot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_
 
     for (size_t i = 0; i < size; i += PAGE_SZ) {      
         if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
-            fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
+            fprintf(stderr, "> @update_prot: %lx isn't mapped\n", addr);
             return false;
         }
 
@@ -356,17 +357,11 @@ _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
-    // if (s_binary->memory_map->addr <= addr && s_binary->memory_map->addr + s_binary->memory_map->size >= addr) {
-    //     return true;
-    // }
-
-    list_for_each_entry(curr, &(s_binary->memory_map->list), list) {
-        if (curr->addr == PAGE_ALIGN(addr)) {
-            return true;
-        }
+    if (-1 == (long)(curr = get_mem_desc(PAGE_ALIGN(addr), s_binary))) {
+        return false;
     }
 
-    return false;
+    return true;
 }
 
 // *=*=*=*=*=*=*=*=
@@ -376,15 +371,12 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
     mem_map_t* iter = NULL;
 
     if (s_binary->interp) {
-        struct list_head* tmp = malloc(sizeof(struct list_head));
-        tmp->next = s_binary->interp->memory_map->list.next;
-        tmp->prev = &(s_binary->interp->memory_map->list);
+        s_binary->memory_map->list.prev->next = &s_binary->interp->memory_map->list;
 
-        list_splice(tmp, &(s_binary->memory_map->list));
-    }
-
-    list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
-        merge_pages(s_binary, iter->prot, iter->addr, iter->size);
+        s_binary->memory_map->list.prev = s_binary->interp->memory_map->list.prev;
+        s_binary->interp->memory_map->list.prev->next = &s_binary->memory_map->list;
+        
+        s_binary->interp->memory_map->list.prev = s_binary->memory_map->list.prev;
     }
 
     return s_binary->memory_map;
@@ -392,40 +384,62 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
 
 // free all the structures mem_map_t that belong to a binary
 int free_memory_map(mem_map_t* memory_map) {
-    mem_map_t* curr = NULL;
+    struct list_head* next = NULL;
+    mem_map_t* curr = memory_map;
 
-    list_for_each_entry(curr, &(memory_map->list), list) {
-        free(container_of(curr, mem_map_t, list));
-    }
+    assert(curr);
 
-    // free(memory_map->list.next);
+    do {
+        next = curr->list.next;
+        free(curr);
+        curr = container_of(next, mem_map_t, list);
+    } while (curr != memory_map);
 
     return 0;
 } 
 
 // adds a mem_map_t according to the new mapping's arguments
 int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) {
-    mem_map_t* curr = malloc(sizeof(mem_map_t));
-    curr->prot = prot;
-    curr->addr = addr;
-    curr->size = size;
-
     if (size % PAGE_SZ || addr % PAGE_SZ) {
         fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
         exit(-1);
     }
 
     if (!s_binary->memory_map) {
-            INIT_LIST_HEAD(&(curr->list));
-    } else { 
-        for (size_t i = 0; i < size % PAGE_SZ; i += PAGE_SZ) {
-            curr->addr = addr + i;
+        mem_map_t* curr = malloc(sizeof(mem_map_t));
+        s_binary->memory_map = curr;
+
+        curr->prot = prot;
+        curr->addr = addr;
+        curr->size = PAGE_SZ;
+
+        if (DEBUG) fprintf(s_binary->debug_stream, "[K] size: %lx ++ %lx -- %lx | %x\n", size, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
+        curr->list.next = &curr->list;
+        curr->list.prev = &curr->list;
+
+        size -= PAGE_SZ; // we mapped the first page of the memory descriptor
+        addr += PAGE_SZ;
+    }
+    
+    if (size) {
+        for (uint64_t i = 0; i < size; i += PAGE_SZ) {
+            mem_map_t* curr = malloc(sizeof(mem_map_t));
+            curr->addr = PAGE_ALIGN(addr) + i;
             curr->size = PAGE_SZ;
-            list_add(&(curr->list), &(s_binary->memory_map->list));
+            curr->prot = prot;
+
+            if (DEBUG) {
+                fprintf(s_binary->debug_stream, "[K=%lx] ++ %lx -- %lx | %x\n", i, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
+            }
+
+            s_binary->memory_map->list.prev->next = &curr->list;
+            curr->list.prev = s_binary->memory_map->list.prev;
+
+            s_binary->memory_map->list.prev = &curr->list;
+            curr->list.next = &s_binary->memory_map->list;
         }
     }
 
-    s_binary->memory_map = curr;
     return 0;
 }
 
@@ -434,13 +448,13 @@ int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
     mem_map_t* _mem_desc = NULL;
 
     if (size % PAGE_SZ || addr % PAGE_SZ) {
-        fprintf(stderr, "Invalid size or addr > @list_del_map, size: %lx, addr: %lx\n", size, addr);
+        fprintf(stderr, "Invalid size or addr > @list_del_map, size: %x, addr: %lx\n", size, addr);
         exit(-1);
     }
 
     for (size_t i = 0; i < size; i += PAGE_SZ) {      
         if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
-            fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
+            // fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
             return false;
         }
 
@@ -451,29 +465,16 @@ int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
     return 0;
 }
 
-// shit
-int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size) {
-    mem_map_t* iter = NULL;
-
-    list_for_each_entry(iter, &(s_binary->memory_map->list), list) {
-        if ((iter->addr + iter->size + 1) == addr && prot == iter->prot) {
-            iter->size += size;
-            return 0;
-        }
-    }
-
-    return -1;
-}
-
 // Prints some mappings
-int log_map(mem_map_t* memory_map, int stream) {
-    mem_map_t* curr = NULL;
+int log_map(mem_map_t* memory_map, FILE* stream) {
+    mem_map_t* curr = memory_map;
 
-    list_for_each_entry(curr, &(memory_map->list), list) {
-        fprintf(stream, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size, curr->size, curr->prot);
-    }
+    assert(curr);
 
-    fprintf(stream, "[+] %lx %lx / %lx # %x\n", memory_map->addr, memory_map->addr + memory_map->size, memory_map->size, curr->prot);
+    do {
+        fprintf(stream, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size-1, curr->size, curr->prot);
+        curr = container_of(curr->list.next, mem_map_t, list);
+    } while (curr != memory_map);
 
     return 0;
 }

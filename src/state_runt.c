@@ -215,7 +215,7 @@ uint64_t read_reg(int key, hashmap_t* hashmap) {
     return -1;
 }
 
-void prnt_large(uint8_t* integer, int count, int stream) {
+void prnt_large(uint8_t* integer, int count, FILE* stream) {
     int64_t *iter = calloc(1, count *  sizeof(int64_t));
     memcpy(iter, integer, count *  sizeof(int64_t));
 
@@ -233,86 +233,86 @@ void prnt_large(uint8_t* integer, int count, int stream) {
     
 }
 
-void prnt_uint128(__m128i integer) {
-    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t));
+void prnt_uint128(__m128i integer, FILE* stream) {
+    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t), stream);
 }
 
-void prnt_uint256(__m256i integer) {
-    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t));
+void prnt_uint256(__m256i integer, FILE* stream) {
+    prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t), stream);
 }
 
-void log_sse(state_rtime_t* state, int stream) {
+void log_sse(state_rtime_t* state, FILE* stream) {
     fprintf(stream, "$xmm0\t ");
-    prnt_uint128(state->sse->xmm0);
+    prnt_uint128(state->sse->xmm0, stream);
     fprintf(stream, "\n$xmm1\t ");
-    prnt_uint128(state->sse->xmm1);
+    prnt_uint128(state->sse->xmm1, stream);
     fprintf(stream, "\n$xmm2\t ");
-    prnt_uint128(state->sse->xmm2);
+    prnt_uint128(state->sse->xmm2, stream);
     fprintf(stream, "\n$xmm3\t ");
-    prnt_uint128(state->sse->xmm3);
+    prnt_uint128(state->sse->xmm3, stream);
     fprintf(stream, "\n$xmm4\t ");
-    prnt_uint128(state->sse->xmm4);
+    prnt_uint128(state->sse->xmm4, stream);
     fprintf(stream, "\n$xmm5\t ");
-    prnt_uint128(state->sse->xmm5);
+    prnt_uint128(state->sse->xmm5, stream);
     fprintf(stream, "\n$xmm6\t ");
-    prnt_uint128(state->sse->xmm6);
+    prnt_uint128(state->sse->xmm6, stream);
     fprintf(stream, "\n$xmm7\t ");
-    prnt_uint128(state->sse->xmm7);
+    prnt_uint128(state->sse->xmm7, stream);
     fprintf(stream, "\n$xmm8\t ");
-    prnt_uint128(state->sse->xmm8);
+    prnt_uint128(state->sse->xmm8, stream);
     fprintf(stream, "\n$xmm9\t ");
-    prnt_uint128(state->sse->xmm9);
+    prnt_uint128(state->sse->xmm9, stream);
     fprintf(stream, "\n$xmm10\t ");
-    prnt_uint128(state->sse->xmm10);
+    prnt_uint128(state->sse->xmm10, stream);
     fprintf(stream, "\n$xmm11\t ");
-    prnt_uint128(state->sse->xmm11);
+    prnt_uint128(state->sse->xmm11, stream);
     fprintf(stream, "\n$xmm12\t ");
-    prnt_uint128(state->sse->xmm12);
+    prnt_uint128(state->sse->xmm12, stream);
     fprintf(stream, "\n$xmm13\t ");
-    prnt_uint128(state->sse->xmm13);
+    prnt_uint128(state->sse->xmm13, stream);
     fprintf(stream, "\n$xmm14\t ");
-    prnt_uint128(state->sse->xmm14);
+    prnt_uint128(state->sse->xmm14, stream);
     fprintf(stream, "\n$xmm15\t");
-    prnt_uint128(state->sse->xmm15);
+    prnt_uint128(state->sse->xmm15, stream);
 }
 
-void log_avx2(state_rtime_t* state, int stream) {
+void log_avx2(state_rtime_t* state, FILE* stream) {
     fprintf(stream, "\n$ymm0\t ");
-    prnt_uint256(state->avx2->ymm0);
+    prnt_uint256(state->avx2->ymm0, stream);
     fprintf(stream, "\n$ymm1\t ");
-    prnt_uint256(state->avx2->ymm1);
+    prnt_uint256(state->avx2->ymm1, stream);
     fprintf(stream, "\n$ymm2\t ");
-    prnt_uint256(state->avx2->ymm2);
+    prnt_uint256(state->avx2->ymm2, stream);
     fprintf(stream, "\n$ymm3\t ");
-    prnt_uint256(state->avx2->ymm3);
+    prnt_uint256(state->avx2->ymm3, stream);
     fprintf(stream, "\n$ymm4\t ");
-    prnt_uint256(state->avx2->ymm4);
+    prnt_uint256(state->avx2->ymm4, stream);
     fprintf(stream, "\n$ymm5\t ");
-    prnt_uint256(state->avx2->ymm5);
+    prnt_uint256(state->avx2->ymm5, stream);
     fprintf(stream, "\n$ymm6\t ");
-    prnt_uint256(state->avx2->ymm6);
+    prnt_uint256(state->avx2->ymm6, stream);
     fprintf(stream, "\n$ymm7\t ");
-    prnt_uint256(state->avx2->ymm7);
+    prnt_uint256(state->avx2->ymm7, stream);
     fprintf(stream, "\n$ymm8\t ");
-    prnt_uint256(state->avx2->ymm8);
+    prnt_uint256(state->avx2->ymm8, stream);
     fprintf(stream, "\n$ymm9\t ");
-    prnt_uint256(state->avx2->ymm9);
+    prnt_uint256(state->avx2->ymm9, stream);
     fprintf(stream, "\n$ymm10\t ");
-    prnt_uint256(state->avx2->ymm10);
+    prnt_uint256(state->avx2->ymm10, stream);
     fprintf(stream, "\n$ymm11\t ");
-    prnt_uint256(state->avx2->ymm11);
+    prnt_uint256(state->avx2->ymm11, stream);
     fprintf(stream, "\n$ymm12\t ");
-    prnt_uint256(state->avx2->ymm12);
+    prnt_uint256(state->avx2->ymm12, stream);
     fprintf(stream, "\n$ymm13\t ");
-    prnt_uint256(state->avx2->ymm13);
+    prnt_uint256(state->avx2->ymm13, stream);
     fprintf(stream, "\n$ymm14\t ");
-    prnt_uint256(state->avx2->ymm14);
+    prnt_uint256(state->avx2->ymm14, stream);
     fprintf(stream, "\n$ymm15\t ");
-    prnt_uint256(state->avx2->ymm15);
+    prnt_uint256(state->avx2->ymm15, stream);
     fprintf(stream, "\n");
 }
 
-void log_general(state_rtime_t* state, int stream) {
+void log_general(state_rtime_t* state, FILE* stream) {
     fprintf(stream, "$rax\t {%lx}\n", state->rax);
     fprintf(stream, "$rbx\t {%lx}\n", state->rbx);
     fprintf(stream, "$rcx\t {%lx}\n", state->rcx);
@@ -333,14 +333,14 @@ void log_general(state_rtime_t* state, int stream) {
     fprintf(stream, "$rflags\t {%lx}\n", state->rflags);
 }
 
-void log_regs(mdata_binary_t* s_binary, int stream) {
+void log_regs(mdata_binary_t* s_binary, FILE* stream) {
 
     log_general(s_binary->dbi_handler->state, stream);
 
     if (s_binary->dbi_handler->state->sse) {
-        log_sse(s_binary->dbi_handler->state);
+        log_sse(s_binary->dbi_handler->state, s_binary->debug_stream);
     } else if (s_binary->dbi_handler->state->avx2) {
-        log_avx2(s_binary->dbi_handler->state);
+        log_avx2(s_binary->dbi_handler->state, s_binary->debug_stream);
     } else if (s_binary->dbi_handler->state->avx512) {
         fprintf(stderr, "FATAL avx512\n");
         exit(-1);

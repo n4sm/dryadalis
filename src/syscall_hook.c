@@ -37,7 +37,7 @@ uint64_t hook_brk(mdata_binary_t* s_binary) {
     // }
 
     if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
-        list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND((state->rax - _brk_base) + 1));
+        list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
     }
 
     return 0;

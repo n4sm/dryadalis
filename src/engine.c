@@ -49,8 +49,8 @@ void default_dtor(void) {
 }
 
 void fatal_dump(mdata_binary_t* s_binary) {
-    log_regs(s_binary, s_binary->debug_stream);
-    log_map(s_binary->memory_map);
+    log_regs(s_binary, stderr);
+    log_map(s_binary->memory_map, stderr);
 
     fprintf(stderr, "[FATAL] exit(-1)\n");
 
@@ -62,7 +62,7 @@ void fatal_dump(mdata_binary_t* s_binary) {
 int make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
     int curr_prot = prot(address, s_binary);
 
-    for (size_t i = 0; i*512 < PAGE_ROUND(size + (PAGE_SZ - PAGE_OFFT(address))) + 1; i += 8) {
+    for (size_t i = 0; i*512 < PAGE_ROUND((size + (PAGE_SZ - PAGE_OFFT(address)))) + 1; i += 8) {
         curr_prot |= ((prot(PAGE_ALIGN(address) + i*512, s_binary) & 0xff) << i);
     
         if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_READ)) {
@@ -80,7 +80,7 @@ int make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
 int make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
     int curr_prot = prot(address, s_binary);
 
-    for (size_t i = 0; i*512 < PAGE_ROUND(size + (PAGE_SZ - PAGE_OFFT(address))) + 1; i += 8) {
+    for (size_t i = 0; i*512 < PAGE_ROUND((size + (PAGE_SZ - PAGE_OFFT(address)))) + 1; i += 8) {
         curr_prot |= ((prot(PAGE_ALIGN(address) + i*512, s_binary) & 0xff) << i);
     
         if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_WRITE)) {
@@ -99,7 +99,7 @@ int restore_prot(mdata_binary_t* s_binary, uint64_t address, ssize_t size, int _
         return -1;
     }
 
-    for (int i = 0; _prot & ~(0xff << i) && i < 32; i += 8) {
+    for (int i = 0; (_prot & (0xff << i)) >> i && i < 32; i += 8) {
         int act_prot = _prot & ~(0xff << i);
 
         if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, act_prot)) {
@@ -264,7 +264,8 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
 
 int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
     if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
-        return -1;
+        fprintf(stderr, "> map_page: addr: %lx\n", PAGE_ALIGN(addr));
+        fatal_dump(s_binary);
     }
 
     list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
@@ -290,7 +291,7 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
 
     if (!is_mapped(target, s_binary)) {
         return -1;
-    } else if (-1 == mem_read(s_binary, buf_insn, INSTRUCTION_MAX_SZ)) {
+    } else if (-1 == mem_read(s_binary, buf_insn, target, INSTRUCTION_MAX_SZ)) {
         return -1;
     }
 
@@ -904,7 +905,7 @@ int instrument(mdata_binary_t* s_binary) {
 // write hook->code to hook->jmp saving orginal bytes in hook->orig_bytes
 int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     if (!is_mapped(PAGE_ALIGN(hook->jmp), s_binary)) {
-        fprintf(stderr, "%lx isn't mapped # write_hook\n", hook->jmp);
+        fprintf(stderr, "> @write_hook: %lx isn't mapped\n", hook->jmp);
         
         if (-1 == map_page(PAGE_ALIGN(hook->jmp), PROT_EXEC | PROT_READ, s_binary)) {
             fprintf(stderr, "map_page failed\n");
@@ -913,20 +914,20 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
 
         hook->to_unmap = PAGE_ALIGN(hook->jmp);
     } else if (!is_mapped(hook->jmp + hook->length, s_binary)) {
-        fprintf(stderr, "> write_hook, %lx isn't mapped\n", hook->jmp + hook->length);
+        fprintf(stderr, "> @write_hook: %lx isn't mapped\n", hook->jmp + hook->length);
         
         if (-1 == map_page(hook->jmp + hook->length, PROT_EXEC | PROT_READ, s_binary)) {
             fprintf(stderr, "map_page failed\n");
             fatal_dump(s_binary);
         }
 
-        hook->to_unmap = PAGE_ALIGN(hook->jmp + hook->length);
+        hook->to_unmap = PAGE_ALIGN((hook->jmp + hook->length));
     }
 
     if (!is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
         fprintf(stderr, "PAGE IS NOT MAPPED\n");
         return -1;
-    } else if (-1 == mem_read(s_binary, hook->orig_bytes, (void* )(hook->jmp), hook->length)) {
+    } else if (-1 == mem_read(s_binary, hook->orig_bytes, (hook->jmp), hook->length)) {
         fprintf(stderr, "> @write_hook failed to read the bytes @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
         return -1;
@@ -944,8 +945,8 @@ uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) 
     off_t off_cflow = opcodes_cflow(base, s_binary, true, OPCODES_CFLOW_FULL);
 
     if (-1 == off_cflow) {
-        fprintf(stderr, "FATAL opcodes_cflow\n");
-        return -1;
+        fprintf(stderr, "> @opcodes_cflow: failed to get offt_cflow\n");
+        fatal_dump(s_binary);
     }
 
     s_binary->dbi_handler->dump->jmp = base + off_cflow;
