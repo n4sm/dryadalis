@@ -189,7 +189,7 @@ typedef struct state_rtime_s {
     uint64_t rsi;
     uint64_t rdi;
     uint64_t rbp;
-    // ==
+
     uint64_t rsp;
     uint64_t rip;
     uint64_t rflags;
@@ -199,7 +199,7 @@ typedef struct state_rtime_s {
     uint64_t es;
     uint64_t ds;
     uint64_t fs;
-    // ==
+
     uint64_t r8;
     uint64_t r9;
     uint64_t r10;
@@ -227,6 +227,7 @@ typedef struct hook_s {
     ssize_t length;
     uint64_t jmp;
     uintptr_t to_unmap;
+    int prot_restore;
 } hook_t;
 
 typedef struct persistent_s {
@@ -260,6 +261,7 @@ typedef struct mem_map_s {
     uint64_t addr;
     ssize_t size;
     int prot;
+    _Bool sync;
 } mem_map_t;
 
 typedef struct mdata_binary_s {
@@ -316,8 +318,7 @@ int init_struct(Elf64_Shdr *buffer_mdata_sh[], Elf64_Phdr *buffer_mdata_ph[], ch
 mdata_binary_t *init_analysis(const char *s);
 int end_analysis(mdata_binary_t *s_binary);
 mdata_binary_t* alloc_binary();
-int free_binary(mdata_binary_t *bi);
-int add_auxvt(uint64_t id, uint64_t* origin, uint64_t *base_auxvt, uint64_t val);
+int add_auxvt(uint64_t id, uint64_t *base_auxvt, uint64_t val);
 
 // core_mapper
 
@@ -330,7 +331,7 @@ int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t siz
 int free_memory_map(mem_map_t* memory_map);
 int log_map(mem_map_t* memory_map, FILE* stream);
 mem_map_t* merge_address_space(mdata_binary_t* s_binary);
-mem_map_t* get_mem_desc(uint64_t addr, mdata_binary_t* s_binary);
+mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr);
 int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size);
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary);
@@ -339,10 +340,10 @@ _Bool is_rw(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary);
 
 // returns the prot according to the address
-int prot(uint64_t addr, mdata_binary_t* s_binary);
+int prot(mdata_binary_t* s_binary, uint64_t addr);
 uint64_t* map_stack();
 int merge_pages(mdata_binary_t* s_binary, int prot, uint64_t addr, ssize_t size);
-int update_prot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot);
+int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot);
 
 // engine
 

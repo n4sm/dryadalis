@@ -22,8 +22,9 @@
 
 #include "../include/dryadalis_x86.h"
 
-
 // ==
+
+#define ARCH_CET_STATUS 0x3001
 
 _Bool must_change;
 
@@ -39,7 +40,11 @@ uint64_t hook_brk(mdata_binary_t* s_binary) {
     // }
 
     if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
-        list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
+        printf("size brk: %lx\n", PAGE_ROUND(((state->rax - _brk_base+1)))+1);
+        if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(_brk_base) + PAGE_SZ, PAGE_ROUND(((state->rax - _brk_base +1)))+1)) {
+            fprintf(stderr, "> @hook_brk > @list_add_map: prot: %x, size: %lx, addr: %lx\n", PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
+            fatal_dump(s_binary);
+        }
     }
 
     return 0;
@@ -94,14 +99,15 @@ uint64_t hook_arch_prctl(mdata_binary_t* s_binary) {
             memcpy(code_debug, "ARCH_MAP_VDSO_X32", strlen("ARCH_MAP_VDSO_X32\0"));
             break;
 
+        case ARCH_CET_STATUS:
+            memcpy(code_debug, "ARCH_CET_STATUS", strlen("ARCH_MAP_VDSO_X32\0"));
+            break;
+
         default:
             memcpy(code_debug, "ARCH_???", strlen("ARCH_???\0"));
-            // fprintf(stderr, "arch_prctl code [ %x ] unhandled\n", code);
+            fprintf(s_binary->debug_stream, "arch_prctl code [ %x ] unhandled\n", code);
             break;
     }
-
-    // state->rax = syscall(__NR_arch_prctl, code, addr);
-    // we don't emulate the syscall
 
     uint64_t try_ret = syscall(__NR_arch_prctl, code, addr);
 
@@ -142,11 +148,16 @@ uint64_t hook_mmap(mdata_binary_t* s_binary) {
 
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
 
-    if (-1 != state->rax) {
-        list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
-    }
+    fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
-    fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %x, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
+    if (-1 != state->rax && !state->rdi) {
+        list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
+    } else if (-1 != state->rax && (state->rcx & MAP_FIXED)) {
+        if (-1 == update_vprot(s_binary, addr, PAGE_ROUND(length)+1, prot)) {
+            fprintf(stderr, "> @hook_munmap: update_vprot failed: address: %lx, size: %lx, prot: %x\n", addr, length, prot);
+            fatal_dump(s_binary);
+        }
+    }
 
     return 0;
 }
@@ -155,7 +166,7 @@ uint64_t hook_writev(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
-    fprintf(stderr, "[ . ] writev (%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
+    fprintf(s_binary->debug_stream, "[ . ] writev (%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
     
     return 0;
 }
@@ -165,7 +176,7 @@ uint64_t hook_exit(mdata_binary_t* s_binary) {
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
     // state->rax = syscall(__NR_exit, state->rdi);
-    fprintf(stderr, "[ . ] exit (%lx)\n", state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] exit (%lx)\n", state->rdi);
     dbi_handler->dtor();
     
     return 0;
@@ -176,7 +187,7 @@ uint64_t hook_exit_grp(mdata_binary_t* s_binary) {
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
     // state->rax = syscall(__NR_exit_group, state->rdi);
-    fprintf(stderr, "[ . ] exit_grp (%lx)\n", state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] exit_grp (%lx)\n", state->rdi);
     dbi_handler->dtor();
 
     return 0;
@@ -185,8 +196,8 @@ uint64_t hook_exit_grp(mdata_binary_t* s_binary) {
 uint64_t hook_openat(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_openat, state->rdi, state->rsi, state->rdx);
-    fprintf(stderr, "[ . ] openat (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+    state->rax = syscall(__NR_openat, state->rdi, state->rsi, state->rdx, state->r10);
+    fprintf(s_binary->debug_stream, "[ . ] openat (%lx, \"%s\", %lx, %lx) = %ld\n", (long)state->rdi, (const char* )state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
 }
@@ -195,7 +206,7 @@ uint64_t hook_fstat(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_fstat, state->rdi, state->rsi);
-    fprintf(stderr, "[ . ] fstat (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] fstat (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
 }
@@ -204,7 +215,7 @@ uint64_t hook_close(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_close, state->rdi);
-    fprintf(stderr, "[ . ] close (%lx) = %ld\n", state->rdi, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] close (%lx) = %ld\n", state->rdi, state->rax);
 
     return 0;
 }
@@ -213,7 +224,7 @@ uint64_t hook_read(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_read, state->rdi, state->rsi, state->rdx);
-    fprintf(stderr, "[ . ] read (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] read (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
 }
@@ -222,9 +233,13 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
-    update_prot(s_binary, state->rdi, state->rsi, state->rdx);
-    
-    fprintf(stderr, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    if (-1 == update_vprot(s_binary, state->rdi, state->rsi, state->rdx)) {
+        fprintf(stderr, "> @hook_mprotect: failed to update_vprot\n");
+        fatal_dump(s_binary);
+    }
+
     return 0;
 }
 
@@ -232,7 +247,7 @@ uint64_t hook_pread64(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_pread64, state->rdi, state->rsi, state->rdx, state->r10);
-    fprintf(stderr, "[ . ] pread64 (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] pread64 (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
 }
@@ -241,9 +256,72 @@ uint64_t hook_munmap(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     state->rax = syscall(__NR_munmap, state->rdi, state->rsi);
-    fprintf(stderr, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+    fprintf(s_binary->debug_stream, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
+
+    return 0;
+}
+
+uint64_t hook_set_tid_address(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_set_tid_address, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] set_tid_address (%lx) = %ld\n", state->rdi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_set_robust_list(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_set_robust_list, state->rdi, state->rsi);
+    fprintf(s_binary->debug_stream, "[ . ] set_robust_list (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_rt_sigaction(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_rt_sigaction, state->rdi, state->rsi, state->rdx, state->r10);
+    fprintf(s_binary->debug_stream, "[ . ] set_rt_sigaction (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_rt_sigprocmask(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_rt_sigprocmask, state->rdi, state->rsi, state->rdx, state->r10);
+    fprintf(s_binary->debug_stream, "[ . ] set_rt_sigprocmask (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_prlimit64(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_prlimit64, state->rdi, state->rsi, state->rdx, state->r10);
+    fprintf(s_binary->debug_stream, "[ . ] prlimit64 (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_statfs(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_statfs, state->rdi, state->rsi);
+    fprintf(s_binary->debug_stream, "[ . ] statfs (\"%s\", %lx) = %ld\n", (const char* )state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_stat(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_stat, state->rdi, state->rsi);
+    fprintf(s_binary->debug_stream, "[ . ] statfs (\"%s\", %lx) = %ld\n", (const char* )state->rdi, state->rsi, state->rax);
 
     return 0;
 }
@@ -294,8 +372,29 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
         case __NR_munmap:
             return hook_munmap;
 
+        case __NR_set_tid_address:
+            return hook_set_tid_address;
+        
+        case __NR_set_robust_list:
+            return hook_set_robust_list;
+
+        case __NR_rt_sigaction:
+            return hook_rt_sigaction;
+
+        case __NR_rt_sigprocmask:
+            return hook_rt_sigprocmask;
+
+        case __NR_prlimit64:
+            return hook_prlimit64;
+
+        case __NR_statfs:
+            return hook_statfs;
+
+        case __NR_stat:
+            return hook_stat;
+
     default:
-        fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
+        fprintf(s_binary->debug_stream, "syscall [ %x ] isn't handled\n", syscall_number);
         return (hook_syscall )-1;
     }
 }

@@ -26,8 +26,6 @@
 
 /*  Dieu le Roy */
 
-// =-=-=-=-=--
-
 int set_fs_gs(void* fs, void* gs) {
     return arch_prctl(ARCH_SET_FS, fs) || arch_prctl(ARCH_SET_GS, gs);
 }
@@ -57,85 +55,131 @@ void fatal_dump(mdata_binary_t* s_binary) {
     exit(-1); 
 }
 
-// returns the protections corresponding to one or more pages according to the size / address
-// TODO: for it works only for 8 contiguous pages, maybe let's write a reliable function ?
-int make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    int curr_prot = prot(address, s_binary);
+/*
+    Safe wrapper for mprotect, updates the sync field to false because that are internal operations, not guest mprotect
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+    @_prot: protections we have to apply
 
-    for (size_t i = 0; i*512 < PAGE_ROUND((size + (PAGE_SZ - PAGE_OFFT(address)))) + 1; i += 8) {
-        curr_prot |= ((prot(PAGE_ALIGN(address) + i*512, s_binary) & 0xff) << i);
-    
-        if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_READ)) {
-            return -1;
-        }
+    returns the memory descriptor if it fails, else -1
+*/
+mem_map_t* w_mem_protect(mdata_binary_t* s_binary, uint64_t addr, size_t size, int _prot) {
+    mem_map_t* _mem_desc = get_mem_desc(s_binary, addr);
+    mem_map_t* mem_desc_return = _mem_desc;
 
-        update_prot(s_binary, PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_READ);
+    if (-1 == (long)_mem_desc) {
+        fprintf(stderr, "> @w_mem_protect > @get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
+        return (mem_map_t* )-1;
     }
 
-    return curr_prot;
+    size_t i = 0;
+    do {
+        if (i) {
+            _mem_desc = container_of(_mem_desc->list.next, mem_map_t, list);
+        }
+
+        if (mprotect((void* )PAGE_ALIGN(addr) + i*512, PAGE_SZ, _prot)) {
+            fprintf(stderr, "> @w_mem_protect: failed to mprotect, addr: %lx, size: %x, prot: %x\n", PAGE_ALIGN(addr) + i*512, PAGE_SZ, _prot);
+            return (mem_map_t* )-1;
+        }
+
+        _mem_desc->sync = false;
+        i += 8;
+    } while ( i*512 < PAGE_ROUND((size + (PAGE_OFFT(addr)))) + 1 \
+              && _mem_desc->addr + _mem_desc->size == (container_of(_mem_desc->list.next, mem_map_t, list))->addr);
+    // we check if the next page descriptor is contiguous to the current page descriptor
+
+    return mem_desc_return;
 }
 
-// returns the protections corresponding to one or more pages according to the size / address
-// TODO: for it works only for 8 contiguous pages, maybe let's write a reliable function ?
-int make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    int curr_prot = prot(address, s_binary);
+/*
+    Safe wrapper for mprotect with READ protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
 
-    for (size_t i = 0; i*512 < PAGE_ROUND((size + (PAGE_SZ - PAGE_OFFT(address)))) + 1; i += 8) {
-        curr_prot |= ((prot(PAGE_ALIGN(address) + i*512, s_binary) & 0xff) << i);
-    
-        if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_WRITE)) {
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+    return w_mem_protect(s_binary, address, size, PROT_READ);    
+}
+
+/*
+    Safe wrapper for mprotect with PROT_READ | PROT_WRITE protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+    return w_mem_protect(s_binary, address, size, PROT_READ | PROT_WRITE);
+}
+
+/*
+    Safe wrapper for mprotect with PROT_READ | PROT_EXEC protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+    return w_mem_protect(s_binary, address, size, PROT_READ | PROT_EXEC);
+}
+
+/*
+    restore_vprot - Restore the virtual protections for one or more pages
+    @s_binary: binary object
+    @size: how much we restore
+    @_mem_desc: the page descriptor from where we want to restore
+
+    returns -1 if it fails else 0
+*/
+int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset) {
+    // mem_map_t* base_page_desc = _mem_desc;
+    size_t i = 0;
+
+    // printf("addr: %lx, size: %lx, sz: %lx, offt: %lx\n", _mem_desc->addr, PAGE_ROUND((size + offset)) + 1, size, offset);
+
+    do {
+        if (i) {
+            _mem_desc = container_of(_mem_desc->list.next, mem_map_t, list);
+        }
+
+        if (mprotect((void* )PAGE_ALIGN(_mem_desc->addr), PAGE_SZ, _mem_desc->prot)) {
+            fprintf(stderr, "> @restore_vprot: failed to mprotect, addr: %lx, size: %x, prot: %x\n", PAGE_ALIGN(_mem_desc->addr), PAGE_SZ, _mem_desc->prot);
             return -1;
         }
 
-        update_prot(s_binary, PAGE_ALIGN(address) + i*512, PAGE_SZ, PROT_WRITE);
-    }
-
-    return curr_prot;
-}
-
-
-#define MAX_SZ_RESTORE_PROT 8
-
-int restore_prot(mdata_binary_t* s_binary, uint64_t address, ssize_t size, int _prot) {
-    int i = 0;
-    int curr_prot = (_prot & (0xff << i)) >> i;
-	assert(size <= MAX_SZ_RESTORE_PROT * PAGE_SZ);
-
-
-	do {
-		printf("%x\n", _prot);
-        if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot)) {
-			fprintf(stderr, "> @restore_prot: failed to mprotect, addr: %lx, size; %lx, prot: %x\n", PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot);
-            return -1;
-        }
-
-        update_prot(s_binary, PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot);
-    
-		i++;
-		curr_prot = 	
-	} while ();
-    
+        _mem_desc->sync = true;
+        i += 8;
+    } while ( i*512 < PAGE_ROUND((size + offset)) + 1 \
+              && (_mem_desc->addr + _mem_desc->size) == (container_of(_mem_desc->list.next, mem_map_t, list))->addr \
+              && !(container_of(_mem_desc->list.next, mem_map_t, list))->sync);
+    // we check if the next page descriptor is contiguous to the current page descriptor
 
     return 0;
 }
 
 int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
-    int act_prot = 0x0;
+    mem_map_t* _mem_desc = NULL;
 
 	if (!is_mapped(from, s_binary)) {
         fprintf(stderr, "> @mem_read > @is_mapped, from: %lx, size: %lx\n", from, size);
         fatal_dump(s_binary);
 	}
 
-    if (-1 == (act_prot = make_readable(s_binary, from, size))) {
+    if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
     	fprintf(stderr, "> @mem_read > @make_readable, from: %lx, size: %lx\n", from, size);
 	    fatal_dump(s_binary);
     }
 
     memcpy(to, (void* )from, size);
 
-    if (-1 == restore_prot(s_binary, from, size, act_prot)) {
-		fprintf(stderr, "> @mem_read > @restore_prot, from: %lx, size: %lx, prot: %x\n", from, size, act_prot);
+    if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(from))) {
+		fprintf(stderr, "> @mem_read > @restore_vprot, from: %lx, size: %lx, prot: %x\n", from, size, _mem_desc->prot);
 		fatal_dump(s_binary);
 	}	
 
@@ -143,24 +187,27 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
 }
 
 int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) {
-    int act_prot = 0x0;
+    mem_map_t* _mem_desc = NULL;
     
-    if (-1 == (act_prot = make_writable(s_binary, to, size))) {
-   		fprintf(stderr, "> @mem_write > @make_readable, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, act_prot);
+	if (!is_mapped(to, s_binary)) {
+        fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
+        fatal_dump(s_binary);
+	}
+
+    if (-1 == (long)(_mem_desc = make_writable(s_binary, to, size))) {
+   		fprintf(stderr, "> @mem_write > @make_readable, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);
 		fatal_dump(s_binary);
 	}
 
     memcpy((void* )to, from, size);
 
-    if (-1 == restore_prot(s_binary, to, size, act_prot)) {
-        fprintf(stderr, "> @mem_write > @restore_prot, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, act_prot);
+    if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(to))) {
+        fprintf(stderr, "> @mem_write > @restore_vprot, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);
         fatal_dump(s_binary);
 	};
-    
+
 	return 0;
 }
-
-// =-=-=-=-=--
 
 // check if an instruction will change the control flow
 _Bool is_cflow(int group) {
@@ -198,8 +245,6 @@ _Bool is_endbr64(uint8_t* s) {
     return !memcmp(s, "\xf3\x0f\x1e\xfa", 4);
 }
 
-//==
-
 uint64_t mxcsr;
 
 void save_mxcsr() {
@@ -210,8 +255,6 @@ void save_mxcsr() {
 void restore_mxcsr() {
     __builtin_ia32_ldmxcsr(mxcsr);
 }
-
-//==
 
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
 int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
@@ -282,8 +325,6 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
     return -1;
 }
 
-// =====
-
 int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
     if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
         fprintf(stderr, "> map_page: addr: %lx\n", PAGE_ALIGN(addr));
@@ -301,8 +342,6 @@ int unmap(uintptr_t addr, size_t sz) {
 
     return 0;
 }
-
-// ====
 
 // returns the length of the instruction for which target points to
 off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
@@ -327,8 +366,6 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
     cs_free(insn, count);
     return ret;
 }
-
-// =-=-=-=-=--
 
 int restore_hook(uint8_t* patch, mdata_binary_t* s_binary) {
     ks_engine *ks;
@@ -382,8 +419,6 @@ int dump_hook(uint8_t* patch, mdata_binary_t* s_binary) {
 
     return size;
 }
-
-// =-=-=-=-=--
 
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
 uint64_t craft_hook(mdata_binary_t* s_binary) {
@@ -739,8 +774,6 @@ int host_save_state(state_rtime_t* state) {
     return 0;
 }
 
-// =-=-=-=-=--
-
 _Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_bbl) {
     switch (request->type) {
         case INSTRUMENT_ADDR:
@@ -928,7 +961,7 @@ int instrument(mdata_binary_t* s_binary) {
 int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     if (!is_mapped(PAGE_ALIGN(hook->jmp), s_binary)) {
         fprintf(stderr, "> @write_hook: %lx isn't mapped\n", hook->jmp);
-        
+ 
         if (-1 == map_page(PAGE_ALIGN(hook->jmp), PROT_EXEC | PROT_READ, s_binary)) {
             fprintf(stderr, "map_page failed\n");
             fatal_dump(s_binary);
@@ -949,14 +982,21 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     if (!is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
         fprintf(stderr, "PAGE IS NOT MAPPED\n");
         return -1;
-    } else if (-1 == mem_read(s_binary, hook->orig_bytes, (hook->jmp), hook->length)) {
+    } else if (-1 == mem_read(s_binary, hook->orig_bytes, hook->jmp, hook->length)) {
         fprintf(stderr, "> @write_hook failed to read the bytes @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
         return -1;
-    } else if (-1 == mem_write(s_binary, (hook->jmp), hook->code, hook->length)) {
+    } else if (-1 == mem_write(s_binary, hook->jmp, hook->code, hook->length)) {
         fprintf(stderr, "> @write_hook failed to write the hook @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
         return -1;
+    }
+
+    if (!(prot(s_binary, hook->jmp) & PROT_EXEC)) {
+        if (-1 == (long)make_executable(s_binary, hook->jmp, PAGE_OFFT((PAGE_SZ - hook->jmp)))) {
+            fprintf(stderr, "> @write_hook > @make_executable, hook->jmp: %lx, offt: %lx\n", hook->jmp, PAGE_OFFT((PAGE_SZ - hook->jmp)));
+            fatal_dump(s_binary);
+        }
     }
 
     return 0;
@@ -988,6 +1028,14 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
     } else if (-1 == mem_write(s_binary, hook->jmp, hook->orig_bytes, hook->length)) {
         fprintf(stderr, "> @restore_bytes, failed to write @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
+    }
+
+    if (hook->prot_restore) {
+        mem_map_t* _mem_desc = NULL;
+        if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, hook->jmp))
+            || -1 == restore_vprot(s_binary, hook->length, _mem_desc, PAGE_OFFT(hook->jmp))) {
+            fatal_dump(s_binary);
+        }
     }
 
     return 0;
@@ -1050,7 +1098,8 @@ void _dispatcher(mdata_binary_t* s_binary) {
     }
 
     if (s_binary->dbi_handler->restore->jmp) {
-        if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) || (s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
+        if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) \
+            || (s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
             fprintf(stderr, "FATAL restore_bytes # restore\n");
             fatal_dump(s_binary);
         }
@@ -1061,7 +1110,8 @@ void _dispatcher(mdata_binary_t* s_binary) {
         fprintf(s_binary->debug_stream, ".\n");
     }
 
-    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
+    if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) \
+        || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
         fprintf(stderr, "FATAL restore_bytes # dump\n");
         fatal_dump(s_binary);
     }
@@ -1083,7 +1133,6 @@ void _dispatcher(mdata_binary_t* s_binary) {
     fflush(s_binary->debug_stream);
     continue_exec(s_binary);
 }
-//== internal functions used by eval_target
 
 // Does the instruction tests flags ?
 _Bool is_test(uint64_t cs_eflags) {
@@ -1281,13 +1330,11 @@ uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
     char buf_insn[16] = {0};
     uint64_t target = 0;
 
-    if (!instruction || !is_mapped((uint64_t)instruction, s_binary) || !is_mapped((uint64_t)instruction+15, s_binary)) {
+    if (-1 == mem_read(s_binary, buf_insn, (uint64_t)instruction, INSTRUCTION_MAX_SZ)) {
+        fprintf(stderr, "> @eval_target: fail to read @ %lx\n", (uint64_t)instruction);
         return -1;
     }
 
-    int curr_prot = make_readable(s_binary, (uint64_t)instruction, (PAGE_OFFT((uint64_t)instruction) + 15) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ);
-
-    memcpy(buf_insn, instruction, 15);
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
         fprintf(stderr, "FATAL OPEN CAPSTONE\n");
         return -1;
@@ -1297,16 +1344,10 @@ uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
     cs_disasm(handle, (const uint8_t *)buf_insn, 16, 0, 1, &insn);
 
     target = __eval_target(insn, s_binary, (uint64_t)instruction);
-    cs_free(insn, 1);  
-    
-    if (-1 == restore_prot(s_binary, (uint64_t)instruction, (PAGE_OFFT((uint64_t)instruction) + 15) > PAGE_SZ ? PAGE_SZ*2 : PAGE_SZ, curr_prot)) {
-        return -1;
-    }
+    cs_free(insn, 1);
 
     return target;
 }
-
-// =-=-=-=-
 
 void continue_exec(mdata_binary_t* s_binary) {
     if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {

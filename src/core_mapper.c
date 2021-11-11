@@ -15,9 +15,7 @@
 
 /* Dieu et le Roy */
 
-// *=*=*=*=*=*=*=
-
-static char* s_weeb = "1337_wEeB_alW4yS_b4hiNd_tHe_ResEaRcHeR\0";
+static char* _random = "fae5fff9bdaa059af959baedeac94d30";
 static char* s_arch = "x86_64\0"; 
 
 // gen random base address
@@ -34,8 +32,6 @@ uint64_t base_address() {
     return PAGE_ALIGN(ret);
 }
 
-// *=*=*=*=*=*=*=
-
 // Load the interpreter
 mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
     uint8_t* interp_str = s_binary->fbinary + (s_binary->pie ? s_ph->p_vaddr : s_ph->p_offset);
@@ -46,8 +42,6 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
     
     return s_binary_interp;
 }
-
-// *=*=*=*=*=*=*=
 
 //manual mapping of a PT_LOAD segment
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
@@ -107,12 +101,13 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         return -1;
     }
 
-    update_prot(s_binary, (uint64_t)(curr_map ? (void *)PAGE_ALIGN(curr_map) : s_binary->base), PAGE_ROUND(s_ph->p_memsz) + 1, PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags));
+    if (-1 == update_vprot(s_binary, curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base, PAGE_ROUND((s_ph->p_memsz)) + 1, PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
+        fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
+        fatal_dump(s_binary);
+    }
 
     return 0;
 }
-
-// *=*=*=*=*=*=*=
 
 // manual mapping of a binary from its filename
 mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
@@ -150,8 +145,6 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
     merge_address_space(s_binary);
     return s_binary;
 }
-
-// *=*=*=*=*=*=*=*=
 
 // creates a stack
 uint64_t* map_stack() {
@@ -202,89 +195,98 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     for ( ; iter[idx]; idx++);
     idx++;
 
-    add_auxvt(AT_ENTRY, &iter[idx], &stack[idx], (uint64_t)(s_binary->base + s_binary->eh->e_entry));
-    add_auxvt(AT_EXECFD, &iter[idx], &stack[idx], s_binary->fd);
-    add_auxvt(AT_PHENT, &iter[idx], &stack[idx], s_binary->eh->e_phentsize);
-    add_auxvt(AT_PHNUM, &iter[idx], &stack[idx], s_binary->eh->e_phnum);
-    add_auxvt(AT_BASE, &iter[idx], &stack[idx], !s_binary->interp ? (uint64_t)s_binary->base : (uint64_t)(s_binary->interp->base));
-    add_auxvt(AT_RANDOM, &iter[idx], &stack[idx], (uint64_t)&s_weeb);
-    add_auxvt(AT_PHDR, &iter[idx], &stack[idx], (uint64_t)(s_binary->base + s_binary->eh->e_phoff));
-    add_auxvt(AT_PLATFORM, &iter[idx], &stack[idx], (uint64_t)&s_arch);
-    add_auxvt(AT_EGID, &iter[idx], &stack[idx], 1000);
-    add_auxvt(AT_EUID, &iter[idx], &stack[idx], 1000);
-    add_auxvt(AT_GID, &iter[idx], &stack[idx], 1000);
-    add_auxvt(AT_UID, &iter[idx], &stack[idx], 1000);
-    add_auxvt(AT_PAGESZ, &iter[idx], &stack[idx], 0x1000);
-    add_auxvt(AT_EXECFN,  &iter[idx], &stack[idx], (uint64_t)(argv[1]));
-    add_auxvt(AT_SYSINFO_EHDR,  &iter[idx], &stack[idx], auxvt(&iter[idx], AT_SYSINFO_EHDR));
-    add_auxvt(AT_SECURE, &iter[idx], &stack[idx], 0x0);
+    add_auxvt(AT_ENTRY, &stack[idx], (uint64_t)(s_binary->base + s_binary->eh->e_entry));
+    add_auxvt(AT_EXECFD, &stack[idx], s_binary->fd);
+    add_auxvt(AT_PHENT, &stack[idx], s_binary->eh->e_phentsize);
+    add_auxvt(AT_PHNUM, &stack[idx], s_binary->eh->e_phnum);
+    add_auxvt(AT_BASE, &stack[idx], !s_binary->interp ? (uint64_t)s_binary->base : (uint64_t)(s_binary->interp->base));
+    add_auxvt(AT_RANDOM, &stack[idx], (uint64_t)&_random);
+    add_auxvt(AT_PHDR, &stack[idx], (uint64_t)(s_binary->base + s_binary->eh->e_phoff));
+    add_auxvt(AT_PLATFORM, &stack[idx], (uint64_t)&s_arch);
+    add_auxvt(AT_EGID, &stack[idx],1000);
+    add_auxvt(AT_EUID, &stack[idx], 1000);
+    add_auxvt(AT_GID, &stack[idx], 1000);
+    add_auxvt(AT_UID, &stack[idx], 1000);
+    add_auxvt(AT_PAGESZ, &stack[idx], 0x1000);
+    add_auxvt(AT_EXECFN, &stack[idx], (uint64_t)(argv[1]));
+    add_auxvt(AT_SYSINFO_EHDR, &stack[idx], auxvt(&iter[idx], AT_SYSINFO_EHDR));
+    add_auxvt(AT_SECURE, &stack[idx], 0x0);
 
-    add_auxvt(AT_NULL, &iter[idx], &stack[idx], 0x0);
+    add_auxvt(AT_NULL, &stack[idx], 0x0);
 
     return stack;
 }
 
-// *=*=*=*=*=*=*=*=
-
-mem_map_t* get_mem_desc(uint64_t addr, mdata_binary_t* s_binary) {
+/*
+    get_mem_desc - returns the memory descriptor of the @addr unaligned address
+    @s_binary: binary descriptor
+    @addr: address for which we're looking for the page descripror, can be unaligned
+*/
+mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr) {
     mem_map_t* curr = s_binary->memory_map;
-
     assert(curr);
 
     do {
         if (curr->addr == PAGE_ALIGN(addr)) return curr;
-        // printf("%lx != %lx\n", curr->addr, addr);
         curr = container_of(curr->list.next, mem_map_t, list);
     } while (curr != s_binary->memory_map);
 
     fprintf(stderr, "> get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
-
     assert(curr == s_binary->memory_map);
+
     return (mem_map_t* )-1;
 }
 
-//==
+/*
+    update_vprot - update the protections and the sync field of a memory descriptor
 
+    @s_binary: binary object
+    @addr: address we handle
+    @size: size on which we're updating the protections from @addr
+    @new_prot: new protections
 
-// updates the prot of @addr
-// TODO: a memory descriptor can describe many pages so according to the size of the mprotect it can be buggy
-int update_prot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot) {
+    returns -1 if it fails else 0
+*/
+int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot) {
     mem_map_t* _mem_desc = NULL;
 
     if (size % PAGE_SZ || addr % PAGE_SZ) {
-        fprintf(stderr, "Invalid size or addr > @update_prot, size: %lx, addr: %lx\n", size, addr);
-        exit(-1);
+        fprintf(stderr, "Invalid size or addr > @update_vprot, size: %lx, addr: %lx\n", size, addr);
+        return -1;
     }
 
-    for (size_t i = 0; i < size; i += PAGE_SZ) {      
-        if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
-            fprintf(stderr, "> @update_prot: %lx isn't mapped\n", addr);
-            return false;
+    // printf("addr: %lx, size: %lx, prot: %lx\n", addr, size, new_prot);
+
+    for (size_t i = 0; i < size; i += PAGE_SZ) {
+        if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, addr + i))) {
+            fprintf(stderr, "> @update_vprot: %lx isn't mapped\n", addr);
+            return -1;
         }
 
         _mem_desc->prot = new_prot;
+        _mem_desc->sync = true;
     }
 
     return 0;
 }
 
 // returns the prot according to the address
-int prot(uint64_t addr, mdata_binary_t* s_binary) {
+int prot(mdata_binary_t* s_binary, uint64_t addr) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(PAGE_ALIGN(addr), s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
         // if the address is not mapped it's not in read write lul
         return -1;
     }
 
-    return mem_descriptor->prot & 0xff;
+    return mem_descriptor->prot;
 }
 
 // is writable
 int is_w(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -296,7 +298,7 @@ int is_w(uint64_t addr, mdata_binary_t* s_binary) {
 int is_r(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -308,7 +310,7 @@ int is_r(uint64_t addr, mdata_binary_t* s_binary) {
 int is_x(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -316,12 +318,10 @@ int is_x(uint64_t addr, mdata_binary_t* s_binary) {
     return mem_descriptor->prot & PROT_EXEC;
 }
 
-//==
-
 _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -332,7 +332,7 @@ _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -343,7 +343,7 @@ _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* mem_descriptor = NULL;
     
-    if (-1 == (long)(mem_descriptor = get_mem_desc(addr, s_binary))) {
+    if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
         // if the address is not mapped it's not in read write lul
         return false;
     }
@@ -351,20 +351,16 @@ _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
     return mem_descriptor->prot & (PROT_EXEC | PROT_READ);
 }
 
-//==
-
 // check if @addr argument is in the doubly linked list memory_map 
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) {
     mem_map_t* curr = NULL;
 
-    if (-1 == (long)(curr = get_mem_desc(PAGE_ALIGN(addr), s_binary))) {
+    if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
         return false;
     }
 
     return true;
 }
-
-// *=*=*=*=*=*=*=*=
 
 // merge the address space of the target binary and its linker.
 mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
@@ -404,36 +400,43 @@ int free_memory_map(mem_map_t* memory_map) {
 int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) {
     if (size % PAGE_SZ || addr % PAGE_SZ) {
         fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
-        exit(-1);
+        return -1;
     }
 
-    if (!s_binary->memory_map) {
-        mem_map_t* curr = malloc(sizeof(mem_map_t));
-        s_binary->memory_map = curr;
+    // if (!s_binary->memory_map) {
+    //     mem_map_t* curr = malloc(sizeof(mem_map_t));
+    //     s_binary->memory_map = curr;
 
-        curr->prot = prot;
-        curr->addr = addr;
-        curr->size = PAGE_SZ;
+    //     curr->prot = prot;
+    //     curr->addr = addr;
+    //     curr->size = PAGE_SZ;
 
-        if (DEBUG) fprintf(s_binary->debug_stream, "[K] size: %lx ++ %lx -- %lx | %x\n", size, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
-        curr->list.next = &curr->list;
-        curr->list.prev = &curr->list;
+    //     if (DEBUG) fprintf(s_binary->debug_stream, "[K] size: %lx ++ %lx -- %lx | %x\n", size, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
+    //     curr->list.next = &curr->list;
+    //     curr->list.prev = &curr->list;
 
-        size -= PAGE_SZ; // we mapped the first page of the memory descriptor
-        addr += PAGE_SZ;
-    }
+    //     size -= PAGE_SZ; // we mapped the first page of the memory descriptor
+    //     addr += PAGE_SZ;
+    // }
     
-    if (size) {
-        for (uint64_t i = 0; i < size; i += PAGE_SZ) {
-            mem_map_t* curr = malloc(sizeof(mem_map_t));
-            curr->addr = PAGE_ALIGN(addr) + i;
-            curr->size = PAGE_SZ;
-            curr->prot = prot;
+    for (uint64_t i = 0; i < size; i += PAGE_SZ) {
+        mem_map_t* curr = (mem_map_t* )malloc(sizeof(mem_map_t));
+        curr->addr = PAGE_ALIGN(addr) + i;
+        curr->size = PAGE_SZ;
+        curr->prot = prot;
+        curr->sync = true;
 
-            if (DEBUG) {
-                fprintf(s_binary->debug_stream, "[K=%lx] ++ %lx -- %lx | %x\n", i, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
-            }
+        if (DEBUG) {
+            fprintf(s_binary->debug_stream, "[K=%lx] ++ %lx -- %lx | %x\n", i, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
+        }
 
+        if (!s_binary->memory_map) {
+            s_binary->memory_map = curr;
+
+            if (DEBUG) fprintf(s_binary->debug_stream, "[K] size: %lx ++ %lx -- %lx | %x\n", size, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
+            curr->list.next = &curr->list;
+            curr->list.prev = &curr->list;
+        } else {
             s_binary->memory_map->list.prev->next = &curr->list;
             curr->list.prev = s_binary->memory_map->list.prev;
 
@@ -445,7 +448,6 @@ int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t siz
     return 0;
 }
 
-//
 int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
     mem_map_t* _mem_desc = NULL;
 
@@ -455,12 +457,12 @@ int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
     }
 
     for (size_t i = 0; i < size; i += PAGE_SZ) {      
-        if (-1 == (long)(_mem_desc = get_mem_desc(addr + i, s_binary))) {
-            // fprintf(stderr, "> @list_del_map: %lx isn't mapped\n", addr);
+        if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, addr + i))) {
             return false;
         }
 
-        list_del(&_mem_desc->list);
+        _mem_desc->list.next->prev = _mem_desc->list.prev;
+        _mem_desc->list.prev->next = _mem_desc->list.next;
         free(_mem_desc);
     }
 
@@ -480,8 +482,6 @@ int log_map(mem_map_t* memory_map, FILE* stream) {
 
     return 0;
 }
-
-// *=*=*=*=*=*=*=*=
 
 // executes the binary
 void exec_binary(mdata_binary_t* s_binary) {
