@@ -371,12 +371,14 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
     mem_map_t* iter = NULL;
 
     if (s_binary->interp) {
-        s_binary->memory_map->list.prev->next = &s_binary->interp->memory_map->list;
+		struct list_head* prev_binary = s_binary->memory_map->list.prev;
+		struct list_head* prev_interp = s_binary->interp->memory_map->list.prev;
 
-        s_binary->memory_map->list.prev = s_binary->interp->memory_map->list.prev;
-        s_binary->interp->memory_map->list.prev->next = &s_binary->memory_map->list;
-        
-        s_binary->interp->memory_map->list.prev = s_binary->memory_map->list.prev;
+		s_binary->memory_map->list.prev = prev_interp;
+		prev_interp->next = &s_binary->memory_map->list;		
+
+		s_binary->interp->memory_map->list.prev = prev_binary;
+		prev_binary->next = &s_binary->interp->memory_map->list;
     }
 
     return s_binary->memory_map;

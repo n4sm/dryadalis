@@ -25,6 +25,8 @@
 
 // ==
 
+_Bool must_change;
+
 uint64_t hook_brk(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 

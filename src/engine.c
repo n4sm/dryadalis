@@ -94,20 +94,26 @@ int make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
 }
 
 
+#define MAX_SZ_RESTORE_PROT 8
+
 int restore_prot(mdata_binary_t* s_binary, uint64_t address, ssize_t size, int _prot) {
-    if (mprotect((void* )PAGE_ALIGN(address), size, _prot | PROT_EXEC)) {
-        return -1;
-    }
+    int i = 0;
+    int curr_prot = (_prot & (0xff << i)) >> i;
+	assert(size <= MAX_SZ_RESTORE_PROT * PAGE_SZ);
 
-    for (int i = 0; (_prot & (0xff << i)) >> i && i < 32; i += 8) {
-        int act_prot = _prot & ~(0xff << i);
 
-        if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, act_prot)) {
+	do {
+		printf("%x\n", _prot);
+        if (mprotect((void* )PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot)) {
+			fprintf(stderr, "> @restore_prot: failed to mprotect, addr: %lx, size; %lx, prot: %x\n", PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot);
             return -1;
         }
 
-        update_prot(s_binary, PAGE_ALIGN(address) + i*512, PAGE_SZ, act_prot);
-    }
+        update_prot(s_binary, PAGE_ALIGN(address) + i*512, PAGE_SZ, curr_prot);
+    
+		i++;
+		curr_prot = 	
+	} while ();
     
 
     return 0;
@@ -115,14 +121,24 @@ int restore_prot(mdata_binary_t* s_binary, uint64_t address, ssize_t size, int _
 
 int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
     int act_prot = 0x0;
-    
+
+	if (!is_mapped(from, s_binary)) {
+        fprintf(stderr, "> @mem_read > @is_mapped, from: %lx, size: %lx\n", from, size);
+        fatal_dump(s_binary);
+	}
+
     if (-1 == (act_prot = make_readable(s_binary, from, size))) {
-        return -1;
+    	fprintf(stderr, "> @mem_read > @make_readable, from: %lx, size: %lx\n", from, size);
+	    fatal_dump(s_binary);
     }
 
     memcpy(to, (void* )from, size);
 
-    if (-1 == restore_prot(s_binary, from, size, act_prot)) return -1;
+    if (-1 == restore_prot(s_binary, from, size, act_prot)) {
+		fprintf(stderr, "> @mem_read > @restore_prot, from: %lx, size: %lx, prot: %x\n", from, size, act_prot);
+		fatal_dump(s_binary);
+	}	
+
     return 0;
 }
 
@@ -130,13 +146,18 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) {
     int act_prot = 0x0;
     
     if (-1 == (act_prot = make_writable(s_binary, to, size))) {
-        return -1;
-    }
+   		fprintf(stderr, "> @mem_write > @make_readable, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, act_prot);
+		fatal_dump(s_binary);
+	}
 
     memcpy((void* )to, from, size);
 
-    if (-1 == restore_prot(s_binary, to, size, act_prot)) return -1;
-    return 0;
+    if (-1 == restore_prot(s_binary, to, size, act_prot)) {
+        fprintf(stderr, "> @mem_write > @restore_prot, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, act_prot);
+        fatal_dump(s_binary);
+	};
+    
+	return 0;
 }
 
 // =-=-=-=-=--
@@ -215,7 +236,8 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
     }
 
     if (-1 == mem_read(s_binary, insn_buffer, addr, PAGE_SZ)) {
-        return -1;
+        fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
+		fatal_dump(s_binary);
     }
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
@@ -1290,10 +1312,6 @@ void continue_exec(mdata_binary_t* s_binary) {
     if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
         fprintf(stderr, "FATAL arch_prctl\n");
     }
-
-    // if (s_binary->dbi_handler->instrumented_fs) {
-    //     int test = 0;
-    // }
 
     __asm__ __volatile__ (
         "vzeroall\n"

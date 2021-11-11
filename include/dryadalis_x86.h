@@ -94,8 +94,6 @@ typedef struct hashmap_s {
     uint64_t** value;
 } hashmap_t;
 
-_Bool must_change;
-
 /* Registers on entry:
  * rax  system call number
  * rcx  return address
