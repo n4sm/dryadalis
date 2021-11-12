@@ -30,17 +30,12 @@ _Bool must_change;
 
 uint64_t hook_brk(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
-
     uint64_t _brk_base = syscall(__NR_brk, 0x0);
 
     state->rax = syscall(__NR_brk, state->rdi);
-
-    // if (DEBUG) {
     fprintf(s_binary->debug_stream, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
-    // }
 
     if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
-        printf("size brk: %lx\n", PAGE_ROUND(((state->rax - _brk_base+1)))+1);
         if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(_brk_base) + PAGE_SZ, PAGE_ROUND(((state->rax - _brk_base +1)))+1)) {
             fprintf(stderr, "> @hook_brk > @list_add_map: prot: %x, size: %lx, addr: %lx\n", PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
             fatal_dump(s_binary);
@@ -147,7 +142,6 @@ uint64_t hook_mmap(mdata_binary_t* s_binary) {
     int offt = state->r9;
 
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
-
     fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
     if (-1 != state->rax && !state->rdi) {
@@ -186,7 +180,6 @@ uint64_t hook_exit_grp(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
-    // state->rax = syscall(__NR_exit_group, state->rdi);
     fprintf(s_binary->debug_stream, "[ . ] exit_grp (%lx)\n", state->rdi);
     dbi_handler->dtor();
 
@@ -326,6 +319,79 @@ uint64_t hook_stat(mdata_binary_t* s_binary) {
     return 0;
 }
 
+uint64_t hook_getuid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_getuid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] getuid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_geteuid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_geteuid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] geteuid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_getegid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_getegid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] getegid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_getgid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_getgid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] getgid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_futex(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_futex, state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9);
+    fprintf(s_binary->debug_stream, "[ . ] futex (%lx, %lx, %lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_getpid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_getpid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] getpid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_gettid(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_gettid, state->rdi);
+    fprintf(s_binary->debug_stream, "[ . ] gettid () = %ld\n", state->rax);
+
+    return 0;
+}
+
+uint64_t hook_tgkill(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_tgkill, state->rdi, state->rsi, state->rdx);
+    fprintf(s_binary->debug_stream, "[ . ] tgkill (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+
 // ====
 
 hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
@@ -392,6 +458,30 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
 
         case __NR_stat:
             return hook_stat;
+
+        case __NR_getuid:
+            return hook_getuid;
+
+        case __NR_geteuid:
+            return hook_geteuid;
+
+        case __NR_getegid:
+            return hook_getegid;
+
+        case __NR_getgid:
+            return hook_getgid;
+
+        case __NR_futex:
+            return hook_futex;
+
+        case __NR_getpid:
+            return hook_getpid;
+
+        case __NR_gettid:
+            return hook_gettid;
+
+        case __NR_tgkill:
+            return hook_tgkill;
 
     default:
         fprintf(s_binary->debug_stream, "syscall [ %x ] isn't handled\n", syscall_number);

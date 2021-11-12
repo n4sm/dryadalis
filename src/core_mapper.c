@@ -101,10 +101,10 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         return -1;
     }
 
-    if (-1 == update_vprot(s_binary, curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base, PAGE_ROUND((s_ph->p_memsz)) + 1, PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
-        fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
-        fatal_dump(s_binary);
-    }
+    // if (-1 == update_vprot(s_binary, curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base, PAGE_ROUND((s_ph->p_memsz)), PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
+    //     fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
+    //     fatal_dump(s_binary);
+    // }
 
     return 0;
 }
@@ -402,22 +402,6 @@ int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t siz
         fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
         return -1;
     }
-
-    // if (!s_binary->memory_map) {
-    //     mem_map_t* curr = malloc(sizeof(mem_map_t));
-    //     s_binary->memory_map = curr;
-
-    //     curr->prot = prot;
-    //     curr->addr = addr;
-    //     curr->size = PAGE_SZ;
-
-    //     if (DEBUG) fprintf(s_binary->debug_stream, "[K] size: %lx ++ %lx -- %lx | %x\n", size, curr->addr, curr->addr + PAGE_SZ-1, PAGE_SZ);
-    //     curr->list.next = &curr->list;
-    //     curr->list.prev = &curr->list;
-
-    //     size -= PAGE_SZ; // we mapped the first page of the memory descriptor
-    //     addr += PAGE_SZ;
-    // }
     
     for (uint64_t i = 0; i < size; i += PAGE_SZ) {
         mem_map_t* curr = (mem_map_t* )malloc(sizeof(mem_map_t));

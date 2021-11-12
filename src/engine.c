@@ -43,7 +43,7 @@ int arch_prctl(int func, void *ptr) {
 
 void default_dtor(void) {
     fprintf(stdout, "End of the program !\n");
-    exit(0);
+    syscall(__NR_exit, 0x0);
 }
 
 void fatal_dump(mdata_binary_t* s_binary) {
@@ -222,6 +222,11 @@ _Bool is_cflow(int group) {
             return true;
         case X86_GRP_BRANCH_RELATIVE:
             return true;
+        case X86_GRP_PRIVILEGE:
+            return true;
+        case X86_GRP_IRET:
+            return true;
+
         default:
             break;
     }
@@ -238,7 +243,7 @@ _Bool is_call(int group) {
 }
 
 _Bool is_interrupt(int group) {
-    return group == X86_GRP_INT;
+    return (group == X86_GRP_INT) || (group == X86_GRP_PRIVILEGE) || (group == X86_GRP_IRET);
 }
 
 _Bool is_endbr64(uint8_t* s) {
@@ -351,12 +356,16 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
     char buf_insn[INSTRUCTION_MAX_SZ] = {0};
 
     if (!is_mapped(target, s_binary)) {
-        return -1;
+        fprintf(stderr, "> @ins_len > @is_mapped: %lx isn't mapped\n", target);
+        fatal_dump(s_binary);
     } else if (-1 == mem_read(s_binary, buf_insn, target, INSTRUCTION_MAX_SZ)) {
-        return -1;
+        fprintf(stderr, "> @ins_len > @mem_read: from: %lx, size: %x\n", target, INSTRUCTION_MAX_SZ);
+        fatal_dump(s_binary);
     }
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
+        fprintf(stderr, "> @ins_len > @cs_open\n");
+        fatal_dump(s_binary);
         return -1;
     }
 
@@ -1007,14 +1016,15 @@ uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) 
     off_t off_cflow = opcodes_cflow(base, s_binary, true, OPCODES_CFLOW_FULL);
 
     if (-1 == off_cflow) {
-        fprintf(stderr, "> @opcodes_cflow: failed to get offt_cflow\n");
+        fprintf(stderr, "> @_instrument_bbl > @opcodes_cflow: failed to get offt_cflow\n");
         fatal_dump(s_binary);
     }
 
     s_binary->dbi_handler->dump->jmp = base + off_cflow;
     s_binary->dbi_handler->length_cflow = insn_len(base + off_cflow, s_binary);
     if (write_hook(s_binary, hook, WRITE_HOOK_FULL)) {
-        return -1;
+        fprintf(stderr, "> @_instrument_bbl > @write_hook: hook->jmp: %lx\n", hook->jmp);
+        fatal_dump(s_binary);
     }
 
     return off_cflow;
