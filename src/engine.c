@@ -263,7 +263,6 @@ void restore_mxcsr() {
 
 // returns how much byte there is up to the first cflow instruction, returns -1 if it fails
 int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
-    csh handle;
     uint8_t insn_buffer[PAGE_SZ] = {0};
     uint64_t saved_addr = addr;
     uint8_t* insn_buf = insn_buffer;
@@ -288,44 +287,38 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
 		fatal_dump(s_binary);
     }
 
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
-        fprintf(stderr, "FATAL capstone\n");
-        return -1;
-    }
-    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    cs_insn *insn = cs_malloc(handle);
-
-    if (!insn) {
-        fatal_dump(s_binary);
-    }
-
-    while(cs_disasm_iter(handle, (const uint8_t **)&insn_buf, &size, &addr, insn)) {
+    while(cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
         if (DEBUG) {
-            fprintf(s_binary->debug_stream, "0x%lx\t%s %s\n", insn->address, insn->mnemonic, insn->op_str);
+            fprintf(s_binary->debug_stream, 
+                    "0x%lx\t%s %s\n", 
+                    s_binary->dbi_handler->cps_utils->insn->address, 
+                    s_binary->dbi_handler->cps_utils->insn->mnemonic, 
+                    s_binary->dbi_handler->cps_utils->insn->op_str
+                    );
         }
 
-        for (size_t i = 0; i < insn->detail->groups_count; i++) {
-            if (is_cflow(insn->detail->groups[i]) && (!beg || insn->detail->groups[i] != X86_GRP_INT)) {
-                cs_free(insn, 1);
+        for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
+            if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i]) 
+                         && (!beg || s_binary->dbi_handler->cps_utils->insn->detail->groups[i] != X86_GRP_INT)) {
+                cs_free(s_binary->dbi_handler->cps_utils->insn, 1);
                 return n;
             }
         }
 
-        n += insn->size;
+        n += s_binary->dbi_handler->cps_utils->insn->size;
         beg = false;
+        s_binary->dbi_handler->cps_utils->count++;
     }
 
     if (is_mapped((addr), s_binary) && addr != saved_addr) {
         // if the page next to the current page is mapped we call opcode_cflow onto it
         if (DEBUG) {
-            fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, addr-insn->size);
+            fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, addr - s_binary->dbi_handler->cps_utils->insn->size);
         }
-        
-        cs_free(insn, 1);
+
         return opcodes_cflow(addr, s_binary, false, opt);
     }
 
-    cs_free(insn, 1);
     fprintf(stderr, "FATAL found nothing\n");
     return -1;
 }
@@ -350,9 +343,8 @@ int unmap(uintptr_t addr, size_t sz) {
 
 // returns the length of the instruction for which target points to
 off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
-    csh handle;
-	cs_insn *insn;
-    ssize_t count;
+    csh handle = s_binary->dbi_handler->cps_utils->handle;
+	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
     char buf_insn[INSTRUCTION_MAX_SZ] = {0};
 
     if (!is_mapped(target, s_binary)) {
@@ -363,16 +355,16 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
         fatal_dump(s_binary);
     }
 
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
-        fprintf(stderr, "> @ins_len > @cs_open\n");
-        fatal_dump(s_binary);
-        return -1;
-    }
+	// if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
+    //     fprintf(stderr, "> @ins_len > @cs_open\n");
+    //     fatal_dump(s_binary);
+    //     return -1;
+    // }
 
-    count = cs_disasm(handle, (const uint8_t *)buf_insn, 15, 0, 0, &insn);
+    s_binary->dbi_handler->cps_utils->count += cs_disasm(handle, (const uint8_t *)buf_insn, 15, 0, 0, &insn);
     off_t ret = insn[0].size;
 
-    cs_free(insn, count);
+    // cs_free(insn, count);
     return ret;
 }
 
@@ -434,7 +426,7 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
     ks_engine *ks;
     ks_err err;
     size_t count;
-    uint8_t *encode = mmap((void* )STUB_ADDR_DUMP, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    uint8_t *encode = (uint8_t* )mmap((void* )STUB_ADDR_DUMP, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     size_t size;
     char insns[10000] = {0};
 
@@ -617,7 +609,7 @@ uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
     ks_engine *ks;
     ks_err err;
     size_t count;
-    uint8_t *encode = mmap((void* )STUB_ADDR_RESTORE, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    uint8_t *encode = (uint8_t* )mmap((void* )STUB_ADDR_RESTORE, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     size_t size;
     char insns[10000] = {0};
 
@@ -797,13 +789,13 @@ _Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_
 }
 
 int set_dump_hook(mdata_binary_t* s_binary) {
-    s_binary->dbi_handler->dump->code = calloc(1, 256);
+    s_binary->dbi_handler->dump->code = (uint8_t* )calloc(1, 256);
     ssize_t size_trampoline = (ssize_t)dump_hook(s_binary->dbi_handler->dump->code, s_binary);
     if (-1 == size_trampoline) {
         fprintf(stderr, "FATAL set_dump_hook\n");
         return -1;
     }
-    if (!(s_binary->dbi_handler->dump->code = realloc(s_binary->dbi_handler->dump->code, size_trampoline+1))) {
+    if (!(s_binary->dbi_handler->dump->code = (uint8_t* )realloc(s_binary->dbi_handler->dump->code, size_trampoline+1))) {
         fprintf(stderr, "FATAL set_dump_hook\n");
         return -1;
     }
@@ -814,13 +806,13 @@ int set_dump_hook(mdata_binary_t* s_binary) {
 }
 
 int set_restore_hook(mdata_binary_t* s_binary) {
-    s_binary->dbi_handler->restore->code = calloc(1, 256);
+    s_binary->dbi_handler->restore->code = (uint8_t* )calloc(1, 256);
     ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
     if (-1 == size_trampoline_restore) {
         fprintf(stderr, "FATAL set_restore_hook\n");
         return -1;
     }
-    if (!(s_binary->dbi_handler->restore->code = realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore))) {
+    if (!(s_binary->dbi_handler->restore->code = (uint8_t* )realloc(s_binary->dbi_handler->restore->code, size_trampoline_restore))) {
         fprintf(stderr, "FATAL set_restore_hook\n");
         return -1;
     }
@@ -935,7 +927,7 @@ int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) {
 
 // main instrumentation abstraction
 int instrument(mdata_binary_t* s_binary) {
-    s_binary->dbi_handler->curr_hook = calloc(1, sizeof(uint64_t));
+    s_binary->dbi_handler->curr_hook = (uint64_t* )calloc(1, sizeof(uint64_t));
     s_binary->dbi_handler->host_rsp = (uint64_t* )((map_stack()));
     s_binary->dispatcher = (uint64_t)_dispatcher;
     s_binary->dbi_handler->u_handler = s_binary->dbi_handler->request->callback;
@@ -1335,9 +1327,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
 }
 
 uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
-    csh handle;
-	cs_insn *insn;
-    char buf_insn[16] = {0};
+    char buf_insn[INSTRUCTION_MAX_SZ] = {0};
     uint64_t target = 0;
 
     if (-1 == mem_read(s_binary, buf_insn, (uint64_t)instruction, INSTRUCTION_MAX_SZ)) {
@@ -1345,16 +1335,8 @@ uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
         return -1;
     }
 
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
-        fprintf(stderr, "FATAL OPEN CAPSTONE\n");
-        return -1;
-    }
-
-    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-    cs_disasm(handle, (const uint8_t *)buf_insn, 16, 0, 1, &insn);
-
-    target = __eval_target(insn, s_binary, (uint64_t)instruction);
-    cs_free(insn, 1);
+    s_binary->dbi_handler->cps_utils->count += cs_disasm(s_binary->dbi_handler->cps_utils->handle, (const uint8_t *)buf_insn, 16, 0, 1, &s_binary->dbi_handler->cps_utils->insn);
+    target = __eval_target(s_binary->dbi_handler->cps_utils->insn, s_binary, (uint64_t)instruction);
 
     return target;
 }

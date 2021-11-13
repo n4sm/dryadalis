@@ -15,6 +15,9 @@
 #include <sys/prctl.h>
 #include <immintrin.h>
 
+#include <capstone/capstone.h>
+#include <capstone/x86.h>
+
 #include "kernel_list.h"
 
 // define
@@ -40,7 +43,6 @@
 #define INSTRUMENT_ADDR 0x1
 #define INSTRUMENT_ADDR_ONLY 0x2
 #define INSTRUMEN_PERSISTENT_HOOK 0x3
-
 
 #define PERSISTENT_NOT_SET 0x0
 #define PERSISTENT_FIND_SPACE 0x4
@@ -235,6 +237,13 @@ typedef struct persistent_s {
     uint64_t address;
 } persistent_t;
 
+typedef struct capstone_hanlder_s {
+    csh handle;
+    cs_insn *insn;
+    uint8_t *instructions;
+    size_t count;
+} capstone_hanlder_t;
+
 typedef struct dbi_instr_s {
     _Bool take_callback;
     state_rtime_t* state;
@@ -253,6 +262,7 @@ typedef struct dbi_instr_s {
     int64_t length_cflow;
     request_t* request;
     persistent_t* persistent_hook;
+    capstone_hanlder_t* cps_utils;
     int8_t curr_instr_mode;
 } dbi_instr_t;
 
@@ -334,6 +344,7 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary);
 mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr);
 int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size);
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary);
+_Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range);
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rw(uint64_t addr, mdata_binary_t* s_binary);

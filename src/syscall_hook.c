@@ -144,7 +144,7 @@ uint64_t hook_mmap(mdata_binary_t* s_binary) {
     state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
-    if (-1 != state->rax && !state->rdi) {
+    if (-1 != state->rax && (!state->rdi || !is_mapped_range(s_binary, state->rdi, length))) {
         list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
     } else if (-1 != state->rax && (state->rcx & MAP_FIXED)) {
         if (-1 == update_vprot(s_binary, addr, PAGE_ROUND(length)+1, prot)) {
@@ -391,6 +391,23 @@ uint64_t hook_tgkill(mdata_binary_t* s_binary) {
     return 0;
 }
 
+uint64_t hook_socket(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_socket, state->rdi, state->rsi, state->rdx);
+    fprintf(s_binary->debug_stream, "[ . ] socket (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_connect(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_connect, state->rdi, state->rsi, state->rdx);
+    fprintf(s_binary->debug_stream, "[ . ] connect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
 
 // ====
 
@@ -482,6 +499,12 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
 
         case __NR_tgkill:
             return hook_tgkill;
+
+        case __NR_socket:
+            return hook_socket;
+        
+        case __NR_connect:
+            return hook_connect;
 
     default:
         fprintf(s_binary->debug_stream, "syscall [ %x ] isn't handled\n", syscall_number);

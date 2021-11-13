@@ -10,6 +10,9 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include <capstone/capstone.h>
+#include <capstone/x86.h>
+
 #include "../include/dryadalis_x86.h"
 
 /*
@@ -233,6 +236,21 @@ mdata_binary_t* init_analysis(const char *s) {
     s_binary->exec_entry = 0x0;
     s_binary->debug_stream = stdout;
 
+    s_binary->dbi_handler->cps_utils = (capstone_hanlder_t* )calloc(1, sizeof(capstone_hanlder_t));
+    if (cs_open(CS_ARCH_X86, CS_MODE_64, &s_binary->dbi_handler->cps_utils->handle) != CS_ERR_OK) {
+        fprintf(stderr, "@init_analysis > @cs_open\n");
+        fatal_dump(s_binary);
+    }
+
+    cs_option(s_binary->dbi_handler->cps_utils->handle, CS_OPT_DETAIL, CS_OPT_ON);
+    s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
+    s_binary->dbi_handler->cps_utils->instructions = NULL;
+
+    if (!s_binary->dbi_handler->cps_utils->insn) {
+        fprintf(stderr, "> @init_analysis > @cs_malloc\n");
+        fatal_dump(s_binary);
+    }
+
     if (false == is_elf(s_binary->fbinary)) {
         fprintf(stderr, "Not a valid elf file\n");
         return (mdata_binary_t* )-1;
@@ -294,6 +312,8 @@ int end_analysis(mdata_binary_t *s_binary) {
     free(s_binary->dbi_handler->restore);
     free(s_binary->dbi_handler->curr_hook);
     free(s_binary->dbi_handler->hashmap);
+    cs_free(s_binary->dbi_handler->cps_utils->insn, s_binary->dbi_handler->cps_utils->count);
+    free(s_binary->dbi_handler->cps_utils);
     free(s_binary->dbi_handler);
     free(s_binary->fbinary);
     free(s_binary->s_ph);
