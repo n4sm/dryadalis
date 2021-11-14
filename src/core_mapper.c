@@ -138,7 +138,9 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments)
         setup_stack(arguments->argv, s_binary, arguments->argc);
     }
 
-    s_binary->exec_entry = (uint64_t)(s_binary->interp ? s_binary->interp->eh->e_entry + (s_binary->interp->base) : s_binary->eh->e_entry + (s_binary->pie ? s_binary->base : 0));
+    s_binary->exec_entry = (uint64_t)(s_binary->interp ? 
+                                                        (uint64_t)(s_binary->interp->pie ? s_binary->interp->base + s_binary->interp->eh->e_entry : s_binary->interp->eh->e_entry) 
+                                                       : (uint64_t)(s_binary->pie ? s_binary->base + s_binary->eh->e_entry : s_binary->eh->e_entry));
 
     fprintf(s_binary->debug_stream, "[*] %s mapped\n", s_binary->filename);
     merge_address_space(s_binary);
@@ -149,7 +151,13 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments)
 uint64_t* map_stack() 
 {
     uint64_t* r = NULL;
-    if (MAP_FAILED == (r = (uint64_t* )mmap(NULL, STACK_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0x0))) return (uint64_t*)-1;
+    if (MAP_FAILED == 
+                  (r = (uint64_t* )mmap(NULL, 
+                                        STACK_SZ, 
+                                        PROT_READ | PROT_WRITE, 
+                                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN, 
+                                        -1, 
+                                        0x0))) return (uint64_t*)-1;
     return (uint64_t* )(r+0x5000);
 }
 
@@ -186,6 +194,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     }
 
     // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
+    s_binary->dbi_handler->base_guest_stack = (uint64_t)stack - 0x200000;
     s_binary->dbi_handler->state->rsp = (uint64_t)stack;
     list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ)+1);
 
@@ -252,7 +261,7 @@ mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr)
         curr = container_of(curr->list.next, mem_map_t, list);
     } while (curr != s_binary->memory_map);
 
-    fprintf(stderr, "> get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
+    if (DEBUG) fprintf(stderr, "> get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
     assert(curr == s_binary->memory_map);
 
     return (mem_map_t* )-1;

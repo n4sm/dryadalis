@@ -147,6 +147,7 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 
 	if (!is_mapped_range(s_binary, from, size) && is_mapped_range(s_binary, PAGE_ALIGN(from), size)) {
         size = size - PAGE_OFFT((size + from));
+        printf("je fais de la merde eheh\n");
 	}
 
     if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
@@ -197,4 +198,21 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
 	};
 
 	return 0;
+}
+
+/*
+    map_page - maps a page @addr with @_prot
+    @addr: location we'd like to map
+    @_prot: protections
+    @s_binary: object descriptor  
+*/
+int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) 
+{
+    if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
+        fprintf(stderr, "> map_page: addr: %lx\n", PAGE_ALIGN(addr));
+        fatal_dump(s_binary);
+    }
+
+    list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
+    return 0;
 }

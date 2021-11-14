@@ -329,7 +329,7 @@ void log_avx2(state_rtime_t* state, FILE* stream)
     fprintf(stream, "\n");
 }
 
-void log_general(state_rtime_t* state, FILE* stream) 
+void log_general(state_rtime_t* state, FILE* stream)
 {
     fprintf(stream, "$rax\t {%lx}\n", state->rax);
     fprintf(stream, "$rbx\t {%lx}\n", state->rbx);

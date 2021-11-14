@@ -38,7 +38,7 @@ int insn_count;
 #define INSTRUMENTED_FS 0x14f0000
 #define INSTRUMENTED_GS 0x15f000
 
-#define STACK_SZ 0x50000
+#define STACK_SZ 0X50000
 #define DEBUG false 
 
 #define INSTRUMENT_BBL 0x0
@@ -260,6 +260,7 @@ typedef struct dbi_instr_s {
     uint64_t *host_rsp;
     hashmap_t* hashmap;
     uint64_t instrumented_fs;
+    uint64_t base_guest_stack;
     uint64_t instrumented_gs;
     int64_t length_cflow;
     request_t* request;
@@ -538,5 +539,13 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size);
     @size: how many bytes we have to write
 */
 int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size);
+
+/*
+    map_page - maps a page @addr with @_prot
+    @addr: location we'd like to map
+    @_prot: protections
+    @s_binary: object descriptor  
+*/
+int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary);
 
 #endif

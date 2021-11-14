@@ -47,7 +47,7 @@ int arch_prctl(int func, void *ptr)
 void default_dtor(void) 
 {
     fprintf(stdout, "End of the program ! bbl count: %x\n", insn_count);
-    syscall(__NR_exit, 0x0);
+    syscall(__NR_exit, 0);
 }
 
 void fatal_dump(mdata_binary_t* s_binary) 
@@ -71,17 +71,6 @@ void save_mxcsr()
 void restore_mxcsr() 
 {
     __builtin_ia32_ldmxcsr(mxcsr);
-}
-
-int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) 
-{
-    if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
-        fprintf(stderr, "> map_page: addr: %lx\n", PAGE_ALIGN(addr));
-        fatal_dump(s_binary);
-    }
-
-    list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
-    return 0;
 }
 
 // TODO: call list_del_map
@@ -630,7 +619,8 @@ int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl)
         *(s_binary->dbi_handler->curr_hook) = base_bbl + _instrument_bbl(s_binary, s_binary->dbi_handler->dump, base_bbl);
 
         if ((s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request, base_bbl))) {
-            if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
+            if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) 
+                || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
                 fprintf(stderr, "FATAL restore_bytes # dump\n");
                 fatal_dump(s_binary);
             }
@@ -677,7 +667,7 @@ int instrument(mdata_binary_t* s_binary)
     if (-1 == instrument_request(s_binary, s_binary->exec_entry)) {
         fatal_dump(s_binary);
     }
-    
+
     s_binary->dbi_handler->state->rip = s_binary->exec_entry;
 
     if (-1 == save_fs_gs(&s_binary->dbi_handler->host_state->fs, &s_binary->dbi_handler->host_state->gs)) {

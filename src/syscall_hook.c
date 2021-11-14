@@ -216,7 +216,15 @@ uint64_t hook_close(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_close, state->rdi);
+    // if it attempts to close stdout, we do not close it
+    if (state->rdi == 1) {
+        if (DEBUG) fprintf(s_binary->debug_stream, "> The guest attempts to close stdout, state->rax = 0\n");
+
+        state->rax = 0;
+    } else {
+        state->rax = syscall(__NR_close, state->rdi);
+    }
+    
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] close (%lx) = %ld\n", state->rdi, state->rax);
 
     return 0;
