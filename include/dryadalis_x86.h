@@ -358,8 +358,6 @@ int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new
 
 // engine
 
-// returns how many byte there is up to the first cflow instruction
-int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt);
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
 int dump_hook(uint8_t* patch, mdata_binary_t* s_binary);
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
@@ -369,7 +367,6 @@ int restore_hook(uint8_t* patch, mdata_binary_t* s_binary);
 int instrument(mdata_binary_t* s_binary);
 uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base);
 
-uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary);
 uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr);
 void _dispatcher(mdata_binary_t* s_binary);
 
@@ -381,8 +378,6 @@ int host_save_state(state_rtime_t* state);
 
 int arch_prctl(int func, void *ptr);
 int set_fs_gs(void* fs, void* gs);
-_Bool is_set(mdata_binary_t* s_binary, int flag);
-_Bool is_jmp_taken(int id, mdata_binary_t* s_binary);
 uint64_t _get_bbl_base(mdata_binary_t* s_binary);
 
 void default_dtor(void);
@@ -417,8 +412,129 @@ _Bool is_if(uint64_t eflags);
 _Bool is_df(uint64_t eflags);
 _Bool is_of(uint64_t eflags);
 
-// syscall_hook
+
+
+// analysis
+
+/*
+    opcodes_cflow - returns how many bytes there are up to the next control flow instruction
+    @addr: address from which the analysis began
+    @s_binary: object descriptor
+    @beg: bool set to true when it's called for the first time
+    @opt: useless
+*/
+int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg);
+
+/* insn_len - returns the length of the instruction for which target points to
+    @target: address of the target instruction
+    @s_binary: object descriptor
+*/
+off_t insn_len(uint64_t target, mdata_binary_t* s_binary);
+
+/*
+    is_jmp_taken - checks if a jmp is taken ot not
+    @id: capstone id of the instruction
+    @s_binary: object descriptor
+*/
+_Bool is_jmp_taken(int id, mdata_binary_t* s_binary);
+
+/*
+    is_test - checks if the instruction checks the eflags
+    @cs_eflags: capstone eflags
+*/
+_Bool is_test(uint64_t cs_eflags);
+
+/*
+    is_set - checks if a particular flag is set in the eflags 
+*/
+_Bool is_set(mdata_binary_t* s_binary, int flag);
+
+/*
+    __eval_target - returns the actual target for the @insn
+    @s_binary: object descriptor
+    @insn: capstone instruction
+    @instruction address
+*/
+uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruction);
+
+/*
+    eval_target - returns the actual target for the control flow instruction @instruction
+    @instruction: pointer to the control flow instruction
+    @s_binary: object descriptor
+*/
+uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary);
+
+
+
+
+
+/* syscall_hook */
 
 hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary);
+
+
+
+
+
+
+/* memory */
+
+/*
+    Safe wrapper for mprotect with READ protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+
+/*
+    Safe wrapper for mprotect with PROT_READ | PROT_WRITE protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+
+/*
+    Safe wrapper for mprotect with PROT_READ | PROT_EXEC protections
+    @s_binary: binary descriptor
+    @addr: page we have to mprotect
+    @size: size we would like to mprotect
+
+    returns -1 if it fails, else 0
+*/
+mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+
+/*
+    restore_vprot - Restore the virtual protections for one or more pages
+    @s_binary: binary object
+    @size: how much we restore
+    @_mem_desc: the page descriptor from where we want to restore
+
+    returns -1 if it fails else 0
+*/
+int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset);
+
+/*
+    mem_read - read @size bytes from @from to @to
+    @s_binary: object descriptor
+    @to: buffer to get the bytes
+    @from: pointer to which we read bytes
+    @size: how many bytes we have to read
+*/
+int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size);
+
+/*
+    mem_write - write @size bytes at @to from @from
+    @s_binary: object descriptor
+    @to: memory area to write
+    @from: pointer from which we have to write
+    @size: how many bytes we have to write
+*/
+int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size);
 
 #endif

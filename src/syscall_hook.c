@@ -409,6 +409,24 @@ uint64_t hook_connect(mdata_binary_t* s_binary) {
     return 0;
 }
 
+uint64_t hook_write(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_write, state->rdi, state->rsi, state->rdx);
+    fprintf(s_binary->debug_stream, "[ . ] write (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_sigaltstack(mdata_binary_t* s_binary) {
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    state->rax = syscall(__NR_sigaltstack, state->rdi, state->rsi);
+    fprintf(s_binary->debug_stream, "[ . ] sigaltstack (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
 // ====
 
 hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
@@ -505,6 +523,12 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary) {
         
         case __NR_connect:
             return hook_connect;
+
+        case __NR_write:
+            return hook_write;
+
+        case __NR_sigaltstack:
+            return hook_sigaltstack;
 
     default:
         fprintf(s_binary->debug_stream, "syscall [ %x ] isn't handled\n", syscall_number);

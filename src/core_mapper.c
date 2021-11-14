@@ -46,14 +46,14 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
 //manual mapping of a PT_LOAD segment
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
     uint64_t curr_map = 0x0;
-    uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map)));
+    uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz))));
 
     if (!s_binary->base) {
         if (MAP_FAILED == (s_binary->base = (uint8_t* )mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), sz, PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
             return -1;
         }
         list_add_map(s_binary, 
-                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
+                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
                 (uint64_t)s_binary->base,
                 sz + 1); // fff + 1
     } else {
@@ -62,7 +62,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
             return -1;
         }
         list_add_map(s_binary,
-                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
+                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
                 PAGE_ALIGN(curr_map),
                 sz + 1); // fff + 1
     }
@@ -101,10 +101,13 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         return -1;
     }
 
-    if (-1 == update_vprot(s_binary, map_end + 1, PAGE_ROUND((bss_end - map_end)) +1, PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
-        fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
-        fatal_dump(s_binary);
-    }
+    // if (-1 == update_vprot(s_binary, 
+    //                        (uint64_t)(curr_map ? (void *)PAGE_ALIGN(curr_map) : (void* )s_binary->base), \
+    //                        PAGE_ROUND((s_ph->p_memsz)) +1, \
+    //                        PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
+    //     fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
+    //     fatal_dump(s_binary);
+    // }
 
     return 0;
 }
@@ -195,7 +198,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     for ( ; iter[idx]; idx++);
     idx++;
 
-    add_auxvt(AT_ENTRY, &stack[idx], (uint64_t)(s_binary->base + s_binary->eh->e_entry));
+    add_auxvt(AT_ENTRY, &stack[idx], s_binary->pie ? (uint64_t)(s_binary->base + s_binary->eh->e_entry) : s_binary->eh->e_entry);
     add_auxvt(AT_EXECFD, &stack[idx], s_binary->fd);
     add_auxvt(AT_PHENT, &stack[idx], s_binary->eh->e_phentsize);
     add_auxvt(AT_PHNUM, &stack[idx], s_binary->eh->e_phnum);
@@ -224,7 +227,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     @range: range we're checking from @base
 */
 _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) {
-    for (size_t i = 0; i < range; i += PAGE_SZ) {
+    for (size_t i = 0; i < PAGE_ROUND(range) + 1; i += PAGE_SZ) {
         if (!is_mapped(base + i - 1, s_binary)) {
             return false;
         }
@@ -491,6 +494,8 @@ int log_map(mem_map_t* memory_map, FILE* stream) {
             fprintf(stream, "[+] %lx %lx / %lx # %x\n", g_addr, g_addr + g_size-1, g_size, g_prot);
             g_size = curr->size;
         }
+
+        // fprintf(stream, "[+] %lx %lx / %lx # %x\n", curr->addr, curr->addr + curr->size-1, curr->size, curr->prot);
 
         curr = container_of(curr->list.next, mem_map_t, list);
     } while (curr != memory_map);

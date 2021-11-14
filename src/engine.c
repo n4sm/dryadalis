@@ -55,201 +55,6 @@ void fatal_dump(mdata_binary_t* s_binary) {
     exit(-1); 
 }
 
-/*
-    Safe wrapper for mprotect, updates the sync field to false because that are internal operations, not guest mprotect
-    @s_binary: binary descriptor
-    @addr: page we have to mprotect
-    @size: size we would like to mprotect
-    @_prot: protections we have to apply
-
-    returns the memory descriptor if it fails, else -1
-*/
-mem_map_t* w_mem_protect(mdata_binary_t* s_binary, uint64_t addr, size_t size, int _prot) {
-    mem_map_t* _mem_desc = get_mem_desc(s_binary, addr);
-    mem_map_t* mem_desc_return = _mem_desc;
-
-    if (-1 == (long)_mem_desc) {
-        fprintf(stderr, "> @w_mem_protect > @get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
-        return (mem_map_t* )-1;
-    }
-
-    size_t i = 0;
-    do {
-        if (i) {
-            _mem_desc = container_of(_mem_desc->list.next, mem_map_t, list);
-        }
-
-        if (mprotect((void* )PAGE_ALIGN(addr) + i*512, PAGE_SZ, _prot)) {
-            fprintf(stderr, "> @w_mem_protect: failed to mprotect, addr: %lx, size: %x, prot: %x\n", PAGE_ALIGN(addr) + i*512, PAGE_SZ, _prot);
-            return (mem_map_t* )-1;
-        }
-
-        _mem_desc->sync = false;
-        i += 8;
-    } while ( i*512 < PAGE_ROUND((size + (PAGE_OFFT(addr)))) + 1 \
-              && _mem_desc->addr + _mem_desc->size == (container_of(_mem_desc->list.next, mem_map_t, list))->addr);
-    // we check if the next page descriptor is contiguous to the current page descriptor
-
-    return mem_desc_return;
-}
-
-/*
-    Safe wrapper for mprotect with READ protections
-    @s_binary: binary descriptor
-    @addr: page we have to mprotect
-    @size: size we would like to mprotect
-
-    returns -1 if it fails, else 0
-*/
-mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    return w_mem_protect(s_binary, address, size, PROT_READ);    
-}
-
-/*
-    Safe wrapper for mprotect with PROT_READ | PROT_WRITE protections
-    @s_binary: binary descriptor
-    @addr: page we have to mprotect
-    @size: size we would like to mprotect
-
-    returns -1 if it fails, else 0
-*/
-mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    return w_mem_protect(s_binary, address, size, PROT_READ | PROT_WRITE);
-}
-
-/*
-    Safe wrapper for mprotect with PROT_READ | PROT_EXEC protections
-    @s_binary: binary descriptor
-    @addr: page we have to mprotect
-    @size: size we would like to mprotect
-
-    returns -1 if it fails, else 0
-*/
-mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
-    return w_mem_protect(s_binary, address, size, PROT_READ | PROT_EXEC);
-}
-
-/*
-    restore_vprot - Restore the virtual protections for one or more pages
-    @s_binary: binary object
-    @size: how much we restore
-    @_mem_desc: the page descriptor from where we want to restore
-
-    returns -1 if it fails else 0
-*/
-int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset) {
-    // mem_map_t* base_page_desc = _mem_desc;
-    size_t i = 0;
-
-    // printf("addr: %lx, size: %lx, sz: %lx, offt: %lx\n", _mem_desc->addr, PAGE_ROUND((size + offset)) + 1, size, offset);
-
-    do {
-        if (i) {
-            _mem_desc = container_of(_mem_desc->list.next, mem_map_t, list);
-        }
-
-        if (mprotect((void* )PAGE_ALIGN(_mem_desc->addr), PAGE_SZ, _mem_desc->prot)) {
-            fprintf(stderr, "> @restore_vprot: failed to mprotect, addr: %lx, size: %x, prot: %x\n", PAGE_ALIGN(_mem_desc->addr), PAGE_SZ, _mem_desc->prot);
-            return -1;
-        }
-
-        _mem_desc->sync = true;
-        i += 8;
-    } while ( i*512 < PAGE_ROUND((size + offset)) + 1 \
-              && (_mem_desc->addr + _mem_desc->size) == (container_of(_mem_desc->list.next, mem_map_t, list))->addr \
-              && !(container_of(_mem_desc->list.next, mem_map_t, list))->sync);
-    // we check if the next page descriptor is contiguous to the current page descriptor
-
-    return 0;
-}
-
-int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
-    mem_map_t* _mem_desc = NULL;
-
-	if (!is_mapped(from, s_binary)) {
-        fprintf(stderr, "> @mem_read > @is_mapped, from: %lx, size: %lx\n", from, size);
-        fatal_dump(s_binary);
-	}
-
-    if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
-    	fprintf(stderr, "> @mem_read > @make_readable, from: %lx, size: %lx\n", from, size);
-	    fatal_dump(s_binary);
-    }
-
-    memcpy(to, (void* )from, size);
-
-    if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(from))) {
-		fprintf(stderr, "> @mem_read > @restore_vprot, from: %lx, size: %lx, prot: %x\n", from, size, _mem_desc->prot);
-		fatal_dump(s_binary);
-	}	
-
-    return 0;
-}
-
-int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) {
-    mem_map_t* _mem_desc = NULL;
-    
-	if (!is_mapped(to, s_binary)) {
-        fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
-        fatal_dump(s_binary);
-	}
-
-    if (-1 == (long)(_mem_desc = make_writable(s_binary, to, size))) {
-   		fprintf(stderr, "> @mem_write > @make_readable, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);
-		fatal_dump(s_binary);
-	}
-
-    memcpy((void* )to, from, size);
-
-    if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(to))) {
-        fprintf(stderr, "> @mem_write > @restore_vprot, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);
-        fatal_dump(s_binary);
-	};
-
-	return 0;
-}
-
-// check if an instruction will change the control flow
-_Bool is_cflow(int group) {
-    switch (group) {
-        case X86_GRP_CALL:
-            return true;
-        case X86_GRP_INT:
-            return true;
-        case X86_GRP_JUMP:
-            return true;
-        case X86_GRP_RET:
-            return true;
-        case X86_GRP_BRANCH_RELATIVE:
-            return true;
-        case X86_GRP_PRIVILEGE:
-            return true;
-        case X86_GRP_IRET:
-            return true;
-
-        default:
-            break;
-    }
-
-    return false;
-}
-
-_Bool is_ret(int group) {
-    return (group == X86_GRP_RET);
-}
-
-_Bool is_call(int group) {
-    return (group == X86_GRP_CALL);
-}
-
-_Bool is_interrupt(int group) {
-    return (group == X86_GRP_INT) || (group == X86_GRP_PRIVILEGE) || (group == X86_GRP_IRET);
-}
-
-_Bool is_endbr64(uint8_t* s) {
-    return !memcmp(s, "\xf3\x0f\x1e\xfa", 4);
-}
-
 uint64_t mxcsr;
 
 void save_mxcsr() {
@@ -259,68 +64,6 @@ void save_mxcsr() {
 
 void restore_mxcsr() {
     __builtin_ia32_ldmxcsr(mxcsr);
-}
-
-// returns how much byte there is up to the first cflow instruction, returns -1 if it fails
-int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg, int opt) {
-    uint8_t insn_buffer[PAGE_SZ] = {0};
-    uint64_t saved_addr = addr;
-    uint8_t* insn_buf = insn_buffer;
-
-    size_t size = PAGE_SZ;
-    int n = 0;
-
-    if (opt == OPCODES_CFLOW_FULL) {
-        if (!is_mapped(addr + size -1, s_binary)) {
-            fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
-            return -1;
-        }
-
-        if (!is_mapped(addr, s_binary)) {
-            fprintf(stderr, "0x%lx is not mapped\n", addr);
-            return -1;
-        }        
-    }
-
-    if (-1 == mem_read(s_binary, insn_buffer, addr, PAGE_SZ)) {
-        fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
-		fatal_dump(s_binary);
-    }
-
-    while(cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
-        if (DEBUG) {
-            fprintf(s_binary->debug_stream, 
-                    "0x%lx\t%s %s\n", 
-                    s_binary->dbi_handler->cps_utils->insn->address, 
-                    s_binary->dbi_handler->cps_utils->insn->mnemonic, 
-                    s_binary->dbi_handler->cps_utils->insn->op_str
-                    );
-        }
-
-        for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
-            if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i]) 
-                         && (!beg || s_binary->dbi_handler->cps_utils->insn->detail->groups[i] != X86_GRP_INT)) {
-                cs_free(s_binary->dbi_handler->cps_utils->insn, 1);
-                return n;
-            }
-        }
-
-        n += s_binary->dbi_handler->cps_utils->insn->size;
-        beg = false;
-        s_binary->dbi_handler->cps_utils->count++;
-    }
-
-    if (is_mapped((addr), s_binary) && addr != saved_addr) {
-        // if the page next to the current page is mapped we call opcode_cflow onto it
-        if (DEBUG) {
-            fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, addr - s_binary->dbi_handler->cps_utils->insn->size);
-        }
-
-        return opcodes_cflow(addr, s_binary, false, opt);
-    }
-
-    fprintf(stderr, "FATAL found nothing\n");
-    return -1;
 }
 
 int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
@@ -339,33 +82,6 @@ int unmap(uintptr_t addr, size_t sz) {
     }
 
     return 0;
-}
-
-// returns the length of the instruction for which target points to
-off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
-    csh handle = s_binary->dbi_handler->cps_utils->handle;
-	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
-    char buf_insn[INSTRUCTION_MAX_SZ] = {0};
-
-    if (!is_mapped(target, s_binary)) {
-        fprintf(stderr, "> @ins_len > @is_mapped: %lx isn't mapped\n", target);
-        fatal_dump(s_binary);
-    } else if (-1 == mem_read(s_binary, buf_insn, target, INSTRUCTION_MAX_SZ)) {
-        fprintf(stderr, "> @ins_len > @mem_read: from: %lx, size: %x\n", target, INSTRUCTION_MAX_SZ);
-        fatal_dump(s_binary);
-    }
-
-	// if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK) {
-    //     fprintf(stderr, "> @ins_len > @cs_open\n");
-    //     fatal_dump(s_binary);
-    //     return -1;
-    // }
-
-    s_binary->dbi_handler->cps_utils->count += cs_disasm(handle, (const uint8_t *)buf_insn, 15, 0, 0, &insn);
-    off_t ret = insn[0].size;
-
-    // cs_free(insn, count);
-    return ret;
 }
 
 int restore_hook(uint8_t* patch, mdata_binary_t* s_binary) {
@@ -829,7 +545,7 @@ int log_persistent_hook(mdata_binary_t* s_binary, uint64_t address) {
 }
 
 int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hook) {
-    off_t offt_cflow = opcodes_cflow(*s_binary->dbi_handler->curr_hook, s_binary, false, OPCODES_CFLOW_RAW);
+    off_t offt_cflow = opcodes_cflow(*s_binary->dbi_handler->curr_hook, s_binary, true);
     s_binary->dbi_handler->take_callback = false;
 
     if (s_binary->dbi_handler->persistent_hook->state == PERSISTENT_FIND_SPACE) {
@@ -952,13 +668,18 @@ int instrument(mdata_binary_t* s_binary) {
         fatal_dump(s_binary);
     }
 
-    // rsp is already set in the mapper
+    // rsp is already set in the mapper engine
     exec_binary(s_binary);
     // no return
     return 0;
 }
 
-// write hook->code to hook->jmp saving orginal bytes in hook->orig_bytes
+/*
+    write_hook - write @hook according to @opt
+    @s_binary: object descriptor
+    @hook: hook descriptor
+    @opt: unused for now
+*/
 int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     if (!is_mapped(PAGE_ALIGN(hook->jmp), s_binary)) {
         fprintf(stderr, "> @write_hook: %lx isn't mapped\n", hook->jmp);
@@ -1003,9 +724,14 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     return 0;
 }
 
-// internal part, returns the offset right after the cflow instruction, updates automatically hook->jmp
+/* _instrument_bbl - internal part, returns the offset right after the cflow instruction, updates automatically hook->jmp
+
+    @s_binary: object descriptor
+    @hook: hook descriptor
+    @base: base address of the basic block we hate to analyse 
+*/
 uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) {
-    off_t off_cflow = opcodes_cflow(base, s_binary, true, OPCODES_CFLOW_FULL);
+    off_t off_cflow = opcodes_cflow(base, s_binary, true);
 
     if (-1 == off_cflow) {
         fprintf(stderr, "> @_instrument_bbl > @opcodes_cflow: failed to get offt_cflow\n");
@@ -1063,7 +789,7 @@ uint64_t _get_bbl_base(mdata_binary_t* s_binary) {
             return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
 
         case INSTRUMENT_ADDR:
-            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, false, OPCODES_CFLOW_RAW)) {
+            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
                 // we check if that's the end of a basic block if so we emulate the br instruction
                 return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
             } else {
@@ -1072,7 +798,7 @@ uint64_t _get_bbl_base(mdata_binary_t* s_binary) {
             }
 
         case INSTRUMENT_ADDR_ONLY:
-            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, false, OPCODES_CFLOW_RAW)) {
+            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
                 // we check if that's the end of a basic block if so we emulate the br instruction
                 return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
             } else {
@@ -1134,211 +860,6 @@ void _dispatcher(mdata_binary_t* s_binary) {
 
     fflush(s_binary->debug_stream);
     continue_exec(s_binary);
-}
-
-// Does the instruction tests flags ?
-_Bool is_test(uint64_t cs_eflags) {
-    return (cs_eflags & (X86_EFLAGS_TEST_AF | X86_EFLAGS_TEST_CF | X86_EFLAGS_TEST_DF | X86_EFLAGS_TEST_IF | X86_EFLAGS_TEST_OF | X86_EFLAGS_TEST_SF | X86_EFLAGS_TEST_TF | X86_EFLAGS_TEST_ZF)) != 0;
-}
-
-// return true if the target flag is set in @eflags
-_Bool is_set(mdata_binary_t* s_binary, int flag) {
-    if (DEBUG) {
-        fprintf(s_binary->debug_stream, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
-    }
-
-    uint64_t eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
-    
-    if (-1 == eflags) {
-        fprintf(stderr, "FATAL read eflags\n");
-        fatal_dump(s_binary);
-    }
-
-    return (eflags & flag) != 0;
-}
-
-_Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
-    switch (id) {
-        case X86_INS_JE:
-            return is_set(s_binary, ZF);
-        case X86_INS_JNE:
-            return !is_set(s_binary, ZF);
-        
-        case X86_INS_JA:
-            return !is_set(s_binary, CF) && !is_set(s_binary, ZF);
-        case X86_INS_JAE:
-            return !is_set(s_binary, CF);
-    
-        case X86_INS_JB:
-            return is_set(s_binary, CF);
-        case X86_INS_JBE:
-            return is_set(s_binary, CF) || is_set(s_binary, ZF);
-
-        case X86_INS_JCXZ:
-            return !read_reg(X86_REG_CX, s_binary->dbi_handler->hashmap);
-        case X86_INS_JECXZ:
-            return !read_reg(X86_REG_ECX, s_binary->dbi_handler->hashmap);
-        case X86_INS_JRCXZ:
-            return !read_reg(X86_REG_RCX, s_binary->dbi_handler->hashmap);
-
-        case X86_INS_JG:
-            return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
-        case X86_INS_JGE:
-            return  ((!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) == (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF)));
-
-        case X86_INS_JL:
-            return (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
-        case X86_INS_JLE:
-            return is_set(s_binary, ZF) || (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
-
-        case X86_INS_JO:
-            return is_set(s_binary, OF);
-        case X86_INS_JNO:
-            return !is_set(s_binary, OF);
-
-        case X86_INS_JP:
-            return is_set(s_binary, PF);
-        case X86_INS_JNP:
-            return !is_set(s_binary, PF);
-
-        case X86_INS_JS:
-            return is_set(s_binary, SF);
-        case X86_INS_JNS:
-            return !is_set(s_binary, SF);
-
-        case X86_INS_JMP:
-            return true;
-
-        default:
-            fprintf(stderr, "not found cflow\n");
-            fatal_dump(s_binary);
-            // not reached
-            return -1;
-    }
-}
-
-long sign_extend(size_t size, uint64_t value) {
-    return (((value & (1 << ((size*8) - 1))) << (63-(size-1))) | ((value & ~(0 << ((size*8)-1)))));
-}
-
-uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruction) {
-    cs_detail* details = insn->detail;
-    cs_x86* x86 = &(details->x86);
-    _Bool achieve = false;
-
-    for (size_t i = 0; i < details->groups_count; i++) {
-        if (details->groups[i] == X86_GRP_JUMP || details->groups[i] == X86_GRP_BRANCH_RELATIVE || is_call(details->groups[i])) {
-            if (is_call(details->groups[i]) || is_jmp_taken(insn->id, s_binary)) {
-                cs_x86_op* operand = &(x86->operands[0]);
-
-                if (DEBUG) {
-                    fprintf(s_binary->debug_stream, " taken ");
-                }
-
-                if (is_call(details->groups[i]) && !achieve) {
-                    // we emulate the call instruction
-                    s_binary->dbi_handler->state->rsp -= 8;
-
-                    if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
-                        fprintf(s_binary->debug_stream, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
-                        return -1;
-                    }
-
-                    *(uint64_t* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
-                    achieve = true;
-                }
-
-                switch (operand->type) {
-                    uint64_t base, index;
-                    case X86_OP_REG:
-                        return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
-                    case X86_OP_IMM:
-                        return (uint64_t)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
-                    case X86_OP_MEM:
-                        // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
-                        base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
-                        if (operand->mem.index != X86_REG_INVALID) {
-                            index = read_reg(operand->mem.index, s_binary->dbi_handler->hashmap);
-                        } else {
-                            index = 0x0;
-                        }
-
-                        if (-1 != base && -1 != index) {
-                            if (operand->mem.base == X86_REG_RIP) {
-                                base += insn->size;
-                            }
-
-                            if (DEBUG) {
-                                fprintf(s_binary->debug_stream, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
-                            }
-
-                            return *((uint64_t* )(base + index * operand->mem.scale + operand->mem.disp));
-                        }
-
-                        fprintf(stderr, "failed to read registers, base [ %x ] => [ %lx ], index [ %x ] => [ %lx ]\n", operand->mem.base, base, operand->mem.index, index);
-                        return -1;
-
-                    default:
-                        fprintf(stderr, "error operand jmp\n");
-                        return -1;
-                }
-            } else {
-                // jmp not taken
-                if (DEBUG) {
-                    fprintf(s_binary->debug_stream, " not taken ");
-                }
-
-                return (uint64_t)(instruction + insn->size);
-            }
-        } else if (is_ret(details->groups[i])) {
-            s_binary->dbi_handler->state->rsp += 8;
-            return *((uint64_t* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
-        } else if (is_interrupt(details->groups[i])) {
-            hook_syscall sys_callback = NULL;
-            uint64_t ret = 0x0;
-            size_t sz = insn->size;
-
-            if ((hook_syscall)-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
-
-                if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
-                    fprintf(stderr, "FATAL arch_prctl\n");
-                }
-                
-                ret = sys_callback(s_binary);
-
-                if (set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
-                    fprintf(stderr, "FATAL arch_prctl\n");
-                }
-
-                if (ret) {
-                    // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
-                    return ret;
-                }
-
-                return (uint64_t)(instruction + sz);
-            }
-
-            return (uint64_t)instruction;
-        }
-    }
-
-    // if that's not a return, a call or a jmp it can be an interrupt and we handle that by a diffrent way so we ignore it for now
-    return (uint64_t)(instruction);
-}
-
-uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
-    char buf_insn[INSTRUCTION_MAX_SZ] = {0};
-    uint64_t target = 0;
-
-    if (-1 == mem_read(s_binary, buf_insn, (uint64_t)instruction, INSTRUCTION_MAX_SZ)) {
-        fprintf(stderr, "> @eval_target: fail to read @ %lx\n", (uint64_t)instruction);
-        return -1;
-    }
-
-    s_binary->dbi_handler->cps_utils->count += cs_disasm(s_binary->dbi_handler->cps_utils->handle, (const uint8_t *)buf_insn, 16, 0, 1, &s_binary->dbi_handler->cps_utils->insn);
-    target = __eval_target(s_binary->dbi_handler->cps_utils->insn, s_binary, (uint64_t)instruction);
-
-    return target;
 }
 
 void continue_exec(mdata_binary_t* s_binary) {
