@@ -12,13 +12,14 @@
 
 #include "../include/dryadalis_x86.h"
 
-int insn_count;
-
-int test(void* s_binary) {
+int test(void* s_binary) 
+{
+    insn_count++;
     return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv) 
+{
     mdata_binary_t *s_binary = NULL;
     insn_count = 0;
     arg_t arguments = {.argc = argc, .argv = argv};

@@ -26,27 +26,32 @@
 
 /*  Dieu le Roy */
 
-int set_fs_gs(void* fs, void* gs) {
+int set_fs_gs(void* fs, void* gs) 
+{
     return arch_prctl(ARCH_SET_FS, fs) || arch_prctl(ARCH_SET_GS, gs);
 }
 
-int save_fs_gs(uint64_t* fs, uint64_t* gs) {
+int save_fs_gs(uint64_t* fs, uint64_t* gs) 
+{
     if (-1 == arch_prctl(ARCH_GET_FS, fs) || -1 == arch_prctl(ARCH_GET_GS, gs)) {
         return -1;
     }
     return 0;
 }
 
-int arch_prctl(int func, void *ptr) {
+int arch_prctl(int func, void *ptr) 
+{
     return syscall(__NR_arch_prctl, func, ptr);
 }
 
-void default_dtor(void) {
-    fprintf(stdout, "End of the program !\n");
+void default_dtor(void) 
+{
+    fprintf(stdout, "End of the program ! bbl count: %x\n", insn_count);
     syscall(__NR_exit, 0x0);
 }
 
-void fatal_dump(mdata_binary_t* s_binary) {
+void fatal_dump(mdata_binary_t* s_binary) 
+{
     log_regs(s_binary, stderr);
     log_map(s_binary->memory_map, stderr);
 
@@ -57,16 +62,19 @@ void fatal_dump(mdata_binary_t* s_binary) {
 
 uint64_t mxcsr;
 
-void save_mxcsr() {
+void save_mxcsr() 
+{
     mxcsr = _mm_getcsr();
 }
 
 
-void restore_mxcsr() {
+void restore_mxcsr() 
+{
     __builtin_ia32_ldmxcsr(mxcsr);
 }
 
-int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
+int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) 
+{
     if (MAP_FAILED == mmap((void* )PAGE_ALIGN(addr), PAGE_SZ, _prot, MAP_ANON | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
         fprintf(stderr, "> map_page: addr: %lx\n", PAGE_ALIGN(addr));
         fatal_dump(s_binary);
@@ -76,15 +84,14 @@ int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary) {
     return 0;
 }
 
-int unmap(uintptr_t addr, size_t sz) {
-    if (-1 == munmap((void* )addr, sz)) {
-        return -1;
-    }
-
-    return 0;
+// TODO: call list_del_map
+int unmap(uintptr_t addr, size_t sz) 
+{
+    return munmap((void* )addr, sz);
 }
 
-int restore_hook(uint8_t* patch, mdata_binary_t* s_binary) {
+int restore_hook(uint8_t* patch, mdata_binary_t* s_binary) 
+{
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -111,7 +118,8 @@ int restore_hook(uint8_t* patch, mdata_binary_t* s_binary) {
 }
 
 // encodes the patch used as a trampoline in @patch to @target, returns -1 if it fails and else the length of the patch 
-int dump_hook(uint8_t* patch, mdata_binary_t* s_binary) {
+int dump_hook(uint8_t* patch, mdata_binary_t* s_binary) 
+{
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -138,7 +146,8 @@ int dump_hook(uint8_t* patch, mdata_binary_t* s_binary) {
 }
 
 // returns the newly mmapped shellcode that dumps the state of the guest into the state struct
-uint64_t craft_hook(mdata_binary_t* s_binary) {
+uint64_t craft_hook(mdata_binary_t* s_binary) 
+{
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -321,7 +330,8 @@ uint64_t craft_hook(mdata_binary_t* s_binary) {
     return STUB_ADDR_DUMP;
 }
 
-uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
+uint64_t craft_restore_stub(mdata_binary_t* s_binary) 
+{
     ks_engine *ks;
     ks_err err;
     size_t count;
@@ -479,7 +489,8 @@ uint64_t craft_restore_stub(mdata_binary_t* s_binary) {
     return (uint64_t)STUB_ADDR_RESTORE;
 }
 
-int host_save_state(state_rtime_t* state) {
+int host_save_state(state_rtime_t* state) 
+{
     __asm__ __volatile__ (
         "mov %%fs, %0\n"
         "mov %%cs, %1\n"
@@ -491,7 +502,8 @@ int host_save_state(state_rtime_t* state) {
     return 0;
 }
 
-_Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_bbl) {
+_Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_bbl) 
+{
     switch (request->type) {
         case INSTRUMENT_ADDR:
             return ((request->address >= base_bbl) && (request->address <= s_binary->dbi_handler->dump->jmp)) ? true : false;
@@ -504,7 +516,8 @@ _Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_
     }
 }
 
-int set_dump_hook(mdata_binary_t* s_binary) {
+int set_dump_hook(mdata_binary_t* s_binary) 
+{
     s_binary->dbi_handler->dump->code = (uint8_t* )calloc(1, 256);
     ssize_t size_trampoline = (ssize_t)dump_hook(s_binary->dbi_handler->dump->code, s_binary);
     if (-1 == size_trampoline) {
@@ -521,7 +534,8 @@ int set_dump_hook(mdata_binary_t* s_binary) {
     return 0;
 }
 
-int set_restore_hook(mdata_binary_t* s_binary) {
+int set_restore_hook(mdata_binary_t* s_binary) 
+{
     s_binary->dbi_handler->restore->code = (uint8_t* )calloc(1, 256);
     ssize_t size_trampoline_restore = restore_hook(s_binary->dbi_handler->restore->code, s_binary);
     if (-1 == size_trampoline_restore) {
@@ -537,14 +551,16 @@ int set_restore_hook(mdata_binary_t* s_binary) {
     return 0;
 }
 
-int log_persistent_hook(mdata_binary_t* s_binary, uint64_t address) {
+int log_persistent_hook(mdata_binary_t* s_binary, uint64_t address) 
+{
     s_binary->dbi_handler->persistent_hook->state = PERSISTENT_FIND_SPACE;
     s_binary->dbi_handler->persistent_hook->address = address;
 
     return 0;
 }
 
-int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hook) {
+int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hook) 
+{
     off_t offt_cflow = opcodes_cflow(*s_binary->dbi_handler->curr_hook, s_binary, true);
     s_binary->dbi_handler->take_callback = false;
 
@@ -590,7 +606,8 @@ int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hoo
 }
 
 // it writes the dump hook and sets the right mode (INSTRUMENT_ADDR / INSTRUMENT_BBL)
-int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) {
+int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) 
+{
     if (s_binary->dbi_handler->persistent_hook->state) {
         if (-1 == instrument_persistent(s_binary, s_binary->dbi_handler->persistent_hook)) {
             fprintf(s_binary->debug_stream, "FATAL instrument_persistent\n");
@@ -642,7 +659,8 @@ int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) {
 }
 
 // main instrumentation abstraction
-int instrument(mdata_binary_t* s_binary) {
+int instrument(mdata_binary_t* s_binary) 
+{
     s_binary->dbi_handler->curr_hook = (uint64_t* )calloc(1, sizeof(uint64_t));
     s_binary->dbi_handler->host_rsp = (uint64_t* )((map_stack()));
     s_binary->dispatcher = (uint64_t)_dispatcher;
@@ -680,7 +698,8 @@ int instrument(mdata_binary_t* s_binary) {
     @hook: hook descriptor
     @opt: unused for now
 */
-int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
+int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt)
+{
     if (!is_mapped(PAGE_ALIGN(hook->jmp), s_binary)) {
         fprintf(stderr, "> @write_hook: %lx isn't mapped\n", hook->jmp);
  
@@ -730,7 +749,8 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt) {
     @hook: hook descriptor
     @base: base address of the basic block we hate to analyse 
 */
-uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) {
+uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) 
+{
     off_t off_cflow = opcodes_cflow(base, s_binary, true);
 
     if (-1 == off_cflow) {
@@ -749,7 +769,8 @@ uint64_t _instrument_bbl(mdata_binary_t* s_binary, hook_t* hook, uint64_t base) 
 }
 
 // restore the hook->orig_bytes at hook->curr_hook
-int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
+int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) 
+{
     if (!is_mapped(hook->jmp, s_binary)) {
         fprintf(stderr, "> @restore_bytes, %lx isn't mapped\n", hook->jmp);
         fatal_dump(s_binary);
@@ -769,7 +790,8 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary) {
     return 0;
 }
 
-uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) {
+uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) 
+{
     uint64_t target = eval_target((uint8_t* )addr, s_binary);
     if (-1 == target) {
         fprintf(stderr, "FATAL eval_target \n");
@@ -783,7 +805,8 @@ uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr) {
     return target;
 }
 
-uint64_t _get_bbl_base(mdata_binary_t* s_binary) {
+uint64_t _get_bbl_base(mdata_binary_t* s_binary) 
+{
     switch (s_binary->dbi_handler->curr_instr_mode) {
         case INSTRUMENT_BBL:
             return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
@@ -812,7 +835,8 @@ uint64_t _get_bbl_base(mdata_binary_t* s_binary) {
     }
 }
 
-void _dispatcher(mdata_binary_t* s_binary) {
+void _dispatcher(mdata_binary_t* s_binary) 
+{
     if (-1 == save_fs_gs(&s_binary->dbi_handler->instrumented_fs, &s_binary->dbi_handler->instrumented_gs)) {
         fprintf(stderr, "FATAL arch_prctl\n");
         fatal_dump(s_binary);
@@ -820,10 +844,8 @@ void _dispatcher(mdata_binary_t* s_binary) {
         fprintf(stderr, "FATAL arch_prctl\n");
         fatal_dump(s_binary);
     }
-
-    if (s_binary->dbi_handler->take_callback) {
-        s_binary->dbi_handler->u_handler(s_binary);
-    }
+    
+    s_binary->dbi_handler->u_handler(s_binary);
 
     if (s_binary->dbi_handler->restore->jmp) {
         if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) \
@@ -862,7 +884,8 @@ void _dispatcher(mdata_binary_t* s_binary) {
     continue_exec(s_binary);
 }
 
-void continue_exec(mdata_binary_t* s_binary) {
+void continue_exec(mdata_binary_t* s_binary) 
+{
     if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
         fprintf(stderr, "FATAL arch_prctl\n");
     }

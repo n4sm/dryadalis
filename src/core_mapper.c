@@ -19,7 +19,8 @@ static char* _random = "fae5fff9bdaa059af959baedeac94d30";
 static char* s_arch = "x86_64\0"; 
 
 // gen random base address
-uint64_t base_address() {
+uint64_t base_address() 
+{
     uint64_t ret = 0x0;
     int fd = 0;
 
@@ -33,7 +34,8 @@ uint64_t base_address() {
 }
 
 // Load the interpreter
-mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
+mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) 
+{
     uint8_t* interp_str = s_binary->fbinary + (s_binary->pie ? s_ph->p_vaddr : s_ph->p_offset);
     mdata_binary_t* s_binary_interp = NULL;
 
@@ -44,7 +46,8 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
 }
 
 //manual mapping of a PT_LOAD segment
-int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
+int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) 
+{
     uint64_t curr_map = 0x0;
     uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz))));
 
@@ -101,19 +104,12 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) {
         return -1;
     }
 
-    // if (-1 == update_vprot(s_binary, 
-    //                        (uint64_t)(curr_map ? (void *)PAGE_ALIGN(curr_map) : (void* )s_binary->base), \
-    //                        PAGE_ROUND((s_ph->p_memsz)) +1, \
-    //                        PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
-    //     fprintf(stderr, "> @map_load, failed to update__vprot for %lx\n", curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base);
-    //     fatal_dump(s_binary);
-    // }
-
     return 0;
 }
 
 // manual mapping of a binary from its filename
-mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
+mdata_binary_t* map_binary(const char *filename, arg_t* arguments) 
+{
     mdata_binary_t *s_binary = NULL;
     printf("[*] Loading %s\n", filename);
 
@@ -150,14 +146,16 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments) {
 }
 
 // creates a stack
-uint64_t* map_stack() {
+uint64_t* map_stack() 
+{
     uint64_t* r = NULL;
     if (MAP_FAILED == (r = (uint64_t* )mmap(NULL, STACK_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0x0))) return (uint64_t*)-1;
     return (uint64_t* )(r+0x5000);
 }
 
 // maps values from argc to stack up to NULL byte
-int map_val(uint64_t* arg, uint64_t* stack) {
+int map_val(uint64_t* arg, uint64_t* stack) 
+{
     for(int i = 0; arg[i]; i++)    stack[i] = arg[i];
     return 0;
 }
@@ -169,14 +167,16 @@ int map_auxvt(uint64_t* arg, uint64_t* stack) {
 }
 
 // get the axilary vector which corresponds to @id
-uint64_t auxvt(uint64_t* orig, uint64_t id) {
+uint64_t auxvt(uint64_t* orig, uint64_t id) 
+{
     int i_orig = 0;
     for( ; orig[i_orig] != id && (orig[i_orig] || orig[i_orig+1]); i_orig++);
     return orig[i_orig+1];
 }
 
 // setup and returns a custom stack for the guest according to the arguments
-uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
+uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) 
+{
     uint64_t *iter = (uint64_t* )argv;
     uint64_t* stack = NULL;
     int idx = 0;
@@ -226,7 +226,8 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc) {
     @base: base address (aligned) of the range we're checkin
     @range: range we're checking from @base
 */
-_Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) {
+_Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) 
+{
     for (size_t i = 0; i < PAGE_ROUND(range) + 1; i += PAGE_SZ) {
         if (!is_mapped(base + i - 1, s_binary)) {
             return false;
@@ -241,7 +242,8 @@ _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) {
     @s_binary: binary descriptor
     @addr: address for which we're looking for the page descripror, can be unaligned
 */
-mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr) {
+mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr) 
+{
     mem_map_t* curr = s_binary->memory_map;
     assert(curr);
 
@@ -266,7 +268,8 @@ mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr) {
 
     returns -1 if it fails else 0
 */
-int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot) {
+int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new_prot) 
+{
     mem_map_t* _mem_desc = NULL;
 
     if (size % PAGE_SZ || addr % PAGE_SZ) {
@@ -288,7 +291,8 @@ int update_vprot(mdata_binary_t* s_binary, uint64_t addr, uint64_t size, int new
 }
 
 // returns the prot according to the address
-int prot(mdata_binary_t* s_binary, uint64_t addr) {
+int prot(mdata_binary_t* s_binary, uint64_t addr) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
@@ -300,7 +304,8 @@ int prot(mdata_binary_t* s_binary, uint64_t addr) {
 }
 
 // is writable
-int is_w(uint64_t addr, mdata_binary_t* s_binary) {
+int is_w(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -312,7 +317,8 @@ int is_w(uint64_t addr, mdata_binary_t* s_binary) {
 }
 
 // is read
-int is_r(uint64_t addr, mdata_binary_t* s_binary) {
+int is_r(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -324,7 +330,8 @@ int is_r(uint64_t addr, mdata_binary_t* s_binary) {
 }
 
 // is executable
-int is_x(uint64_t addr, mdata_binary_t* s_binary) {
+int is_x(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -335,7 +342,8 @@ int is_x(uint64_t addr, mdata_binary_t* s_binary) {
     return mem_descriptor->prot & PROT_EXEC;
 }
 
-_Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
+_Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -346,7 +354,8 @@ _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary) {
     return mem_descriptor->prot == PROT_READ;
 }
 
-_Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
+_Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -357,7 +366,8 @@ _Bool is_rwx(uint64_t addr, mdata_binary_t* s_binary) {
     return mem_descriptor->prot & (PROT_READ | PROT_EXEC | PROT_READ);
 }
 
-_Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
+_Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* mem_descriptor = NULL;
     
     if (-1 == (long)(mem_descriptor = get_mem_desc(s_binary, addr))) {
@@ -369,7 +379,8 @@ _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary) {
 }
 
 // check if @addr argument is in the doubly linked list memory_map 
-_Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) {
+_Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) 
+{
     mem_map_t* curr = NULL;
 
     if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
@@ -380,7 +391,8 @@ _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) {
 }
 
 // merge the address space of the target binary and its linker.
-mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
+mem_map_t* merge_address_space(mdata_binary_t* s_binary) 
+{
     mem_map_t* iter = NULL;
 
     if (s_binary->interp) {
@@ -398,7 +410,8 @@ mem_map_t* merge_address_space(mdata_binary_t* s_binary) {
 }
 
 // free all the structures mem_map_t that belong to a binary
-int free_memory_map(mem_map_t* memory_map) {
+int free_memory_map(mem_map_t* memory_map) 
+{
     struct list_head* next = NULL;
     mem_map_t* curr = memory_map;
 
@@ -414,7 +427,8 @@ int free_memory_map(mem_map_t* memory_map) {
 } 
 
 // adds a mem_map_t according to the new mapping's arguments
-int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) {
+int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) 
+{
     if (size % PAGE_SZ || addr % PAGE_SZ) {
         fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
         return -1;
@@ -449,7 +463,8 @@ int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t siz
     return 0;
 }
 
-int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
+int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) 
+{
     mem_map_t* _mem_desc = NULL;
 
     if (size % PAGE_SZ || addr % PAGE_SZ) {
@@ -471,7 +486,8 @@ int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) {
 }
 
 // Prints some mappings
-int log_map(mem_map_t* memory_map, FILE* stream) {
+int log_map(mem_map_t* memory_map, FILE* stream) 
+{
     mem_map_t* curr = memory_map;
 
     uint64_t g_addr = curr->addr;
@@ -504,7 +520,8 @@ int log_map(mem_map_t* memory_map, FILE* stream) {
 }
 
 // executes the binary
-void exec_binary(mdata_binary_t* s_binary) {
+void exec_binary(mdata_binary_t* s_binary) 
+{
     __asm__ __volatile__ (
         "mov %0, %%rax\n"
         "mov %1, %%rsp\n"

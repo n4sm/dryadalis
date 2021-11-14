@@ -82,7 +82,8 @@ _Bool is_interrupt(int group) {
     @beg: bool set to true when it's called for the first time
     @opt: useless
 */
-int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
+int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) 
+{
     uint8_t insn_buffer[PAGE_SZ] = {0};
     uint64_t saved_addr = addr;
     uint8_t* insn_buf = insn_buffer;
@@ -90,10 +91,10 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
     size_t size = PAGE_SZ;
     int n = 0;
 
-    // if (!is_mapped(addr + size -1, s_binary)) {
-    //     fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
-    //     return -1;
-    // }
+    if (!is_mapped(PAGE_ALIGN((addr + size)), s_binary)) {
+        fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
+        return -1;
+    }
 
     if (!is_mapped(addr, s_binary)) {
         fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
@@ -144,7 +145,8 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) {
     @target: address of the target instruction
     @s_binary: object descriptor
 */
-off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
+off_t insn_len(uint64_t target, mdata_binary_t* s_binary) 
+{
     csh handle = s_binary->dbi_handler->cps_utils->handle;
 	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
     char buf_insn[INSTRUCTION_MAX_SZ] = {0};
@@ -169,7 +171,8 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary) {
     @id: capstone id of the instruction
     @s_binary: object descriptor
 */
-_Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
+_Bool is_jmp_taken(int id, mdata_binary_t* s_binary) 
+{
     switch (id) {
         case X86_INS_JE:
             return is_set(s_binary, ZF);
@@ -233,14 +236,16 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) {
     is_test - checks if the instruction checks the eflags
     @cs_eflags: capstone eflags
 */
-_Bool is_test(uint64_t cs_eflags) {
+_Bool is_test(uint64_t cs_eflags) 
+{
     return (cs_eflags & (X86_EFLAGS_TEST_AF | X86_EFLAGS_TEST_CF | X86_EFLAGS_TEST_DF | X86_EFLAGS_TEST_IF | X86_EFLAGS_TEST_OF | X86_EFLAGS_TEST_SF | X86_EFLAGS_TEST_TF | X86_EFLAGS_TEST_ZF)) != 0;
 }
 
 /*
     is_set - checks if a particular flag is set in the eflags 
 */
-_Bool is_set(mdata_binary_t* s_binary, int flag) {
+_Bool is_set(mdata_binary_t* s_binary, int flag) 
+{
     if (DEBUG) {
         fprintf(s_binary->debug_stream, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
     }
@@ -259,7 +264,8 @@ _Bool is_set(mdata_binary_t* s_binary, int flag) {
     @size: size for the extension
     @value: value we want to extend
 */
-long sign_extend(size_t size, uint64_t value) {
+long sign_extend(size_t size, uint64_t value) 
+{
     return (((value & (1 << ((size*8) - 1))) << (63-(size-1))) | ((value & ~(0 << ((size*8)-1)))));
 }
 
@@ -270,7 +276,8 @@ long sign_extend(size_t size, uint64_t value) {
     @insn: capstone instruction
     @instruction address
 */
-uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruction) {
+uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruction) 
+{
     cs_detail* details = insn->detail;
     cs_x86* x86 = &(details->x86);
     _Bool achieve = false;
@@ -380,7 +387,8 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
     @instruction: pointer to the control flow instruction
     @s_binary: object descriptor
 */
-uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) {
+uint64_t eval_target(uint8_t* instruction, mdata_binary_t* s_binary) 
+{
     char buf_insn[INSTRUCTION_MAX_SZ] = {0};
     uint64_t target = 0;
 

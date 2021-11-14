@@ -33,7 +33,8 @@
 
     returns the memory descriptor if it fails, else -1
 */
-mem_map_t* w_mem_protect(mdata_binary_t* s_binary, uint64_t addr, size_t size, int _prot) {
+mem_map_t* w_mem_protect(mdata_binary_t* s_binary, uint64_t addr, size_t size, int _prot) 
+{
     mem_map_t* _mem_desc = get_mem_desc(s_binary, addr);
     mem_map_t* mem_desc_return = _mem_desc;
 
@@ -70,7 +71,8 @@ mem_map_t* w_mem_protect(mdata_binary_t* s_binary, uint64_t addr, size_t size, i
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) 
+{
     return w_mem_protect(s_binary, address, size, PROT_READ);    
 }
 
@@ -82,7 +84,8 @@ mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t siz
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) 
+{
     return w_mem_protect(s_binary, address, size, PROT_READ | PROT_WRITE);
 }
 
@@ -94,7 +97,8 @@ mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t siz
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) {
+mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size) 
+{
     return w_mem_protect(s_binary, address, size, PROT_READ | PROT_EXEC);
 }
 
@@ -106,11 +110,12 @@ mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t s
 
     returns -1 if it fails else 0
 */
-int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset) {
+int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset) 
+{
     size_t i = 0;
 
     do {
-        if (i) {
+        if (i > 0) {
             _mem_desc = container_of(_mem_desc->list.next, mem_map_t, list);
         }
 
@@ -136,11 +141,12 @@ int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, o
     @from: pointer to which we read bytes
     @size: how many bytes we have to read
 */
-int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
+int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) 
+{
     mem_map_t* _mem_desc = NULL;
 
 	if (!is_mapped_range(s_binary, from, size) && is_mapped_range(s_binary, PAGE_ALIGN(from), size)) {
-        size = PAGE_OFFT(size) ? size - PAGE_OFFT(size) : size - (PAGE_SZ - PAGE_OFFT(from));
+        size = size - PAGE_OFFT((size + from));
 	}
 
     if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
@@ -165,9 +171,14 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) {
     @from: pointer from which we have to write
     @size: how many bytes we have to write
 */
-int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) {
+int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) 
+{
     mem_map_t* _mem_desc = NULL;
-    
+
+	if (!is_mapped_range(s_binary, to, size) && is_mapped_range(s_binary, PAGE_ALIGN(to), size)) {
+        size = size - PAGE_OFFT((size + to));
+	}
+
 	if (!is_mapped(PAGE_ALIGN(to), s_binary)) {
         fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
         fatal_dump(s_binary);

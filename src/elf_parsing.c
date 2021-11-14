@@ -18,7 +18,8 @@
 /*
     Sanity check to ensure the binary we plan to analyse is an ELF binary
 */
-_Bool is_elf(uint8_t *eh_ptr) {
+_Bool is_elf(uint8_t *eh_ptr) 
+{
     if ((uint8_t)eh_ptr[EI_MAG0] != 0x7F ||
         (uint8_t)eh_ptr[EI_MAG1] != 'E' ||
         (uint8_t)eh_ptr[EI_MAG2] != 'L' || 
@@ -34,7 +35,8 @@ _Bool is_elf(uint8_t *eh_ptr) {
     @buffer_mdata_ph: array of program header
     @eh_ptr: executable header
 */
-Elf64_Phdr *search_pt_dyn(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) {
+Elf64_Phdr *search_pt_dyn(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) 
+{
     for (int i = 0; i < eh_ptr->e_phnum; ++i) {
         if (buffer_mdata_ph[i]->p_type == PT_DYNAMIC) {
             return buffer_mdata_ph[i];
@@ -48,7 +50,8 @@ Elf64_Phdr *search_pt_dyn(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) {
     @buffer_mdata_ph: array of program header
     @eh_ptr: executable header
 */
-_Bool is_pie(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) {
+_Bool is_pie(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) 
+{
     return eh_ptr->e_type == ET_DYN;
 }
 
@@ -57,7 +60,8 @@ _Bool is_pie(Elf64_Phdr **buffer_mdata_ph, Elf64_Ehdr *eh_ptr) {
     @buffer_mdata_phdr: array of program header
     @eh_ptr: executable header
 */
-uint64_t search_base_addr(Elf64_Phdr **buffer_mdata_phdr, Elf64_Ehdr *eh_ptr) {
+uint64_t search_base_addr(Elf64_Phdr **buffer_mdata_phdr, Elf64_Ehdr *eh_ptr) 
+{
     uint64_t min = buffer_mdata_phdr[0]->p_vaddr;
 
     for (int i = 0; i < eh_ptr->e_phnum; ++i) {
@@ -75,7 +79,8 @@ uint64_t search_base_addr(Elf64_Phdr **buffer_mdata_phdr, Elf64_Ehdr *eh_ptr) {
     @buffer_mdata_ph: buffer which will contain pointers to each program header
     @ptr: pointer to the executable header
 */
-int parse_phdr(Elf64_Ehdr *ptr, Elf64_Phdr *buffer_mdata_ph[]) {
+int parse_phdr(Elf64_Ehdr *ptr, Elf64_Phdr *buffer_mdata_ph[]) 
+{
 	Elf64_Ehdr *ptr_2 = (Elf64_Ehdr *)ptr;
 
 	for (size_t i = 0; i < ptr->e_phnum; i++) {
@@ -90,7 +95,8 @@ int parse_phdr(Elf64_Ehdr *ptr, Elf64_Phdr *buffer_mdata_ph[]) {
     @buffer_mdata_sh: buffer which will contain pointers to each section header
     @ptr: pointer to the executable header
 */
-int parse_shdr(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[]) {
+int parse_shdr(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[]) 
+{
 	Elf64_Ehdr *ptr_2 = (Elf64_Ehdr *)ptr;
 
 	for (size_t i = 0; i < ptr->e_shnum; i++) {
@@ -107,7 +113,8 @@ int parse_shdr(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[]) {
     @sh_name: buffer to contain pointers to each section name
     @ptr: pointer to the executable header
 */
-char **parse_sh_name(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[], char **sh_name_buffer) {
+char **parse_sh_name(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[], char **sh_name_buffer) 
+{
 	Elf64_Shdr *shstrtab_header = (Elf64_Shdr *) ((char *)ptr + (ptr->e_shoff + ptr->e_shentsize * ptr->e_shstrndx));
 	const char *shstrndx = (const char *)ptr + shstrtab_header->sh_offset;
 
@@ -125,7 +132,8 @@ char **parse_sh_name(Elf64_Ehdr *ptr, Elf64_Shdr *buffer_mdata_sh[], char **sh_n
     @sh_name: buffer to contain pointers to each section name
     @ptr: pointer to the executable header
 */
-int init_struct(Elf64_Shdr *buffer_mdata_sh[], Elf64_Phdr *buffer_mdata_ph[], char **sh_name, Elf64_Ehdr *ptr) {
+int init_struct(Elf64_Shdr *buffer_mdata_sh[], Elf64_Phdr *buffer_mdata_ph[], char **sh_name, Elf64_Ehdr *ptr) 
+{
     if (buffer_mdata_ph && parse_phdr(ptr, buffer_mdata_ph)) {
         return -1;
     } else if (buffer_mdata_sh && parse_shdr(ptr, buffer_mdata_sh)) {
@@ -140,7 +148,8 @@ int init_struct(Elf64_Shdr *buffer_mdata_sh[], Elf64_Phdr *buffer_mdata_ph[], ch
 /*
     Allocate the mdata_binary_t structure
 */
-mdata_binary_t* alloc_binary() {
+mdata_binary_t* alloc_binary() 
+{
     return (mdata_binary_t *)calloc(1, sizeof(mdata_binary_t));
 }
 
@@ -148,7 +157,8 @@ mdata_binary_t* alloc_binary() {
     Allocate an array of pointers to the program header
     @nr_phdr: number of program header
 */
-Elf64_Phdr** alloc_ph(int nr_phdr) {
+Elf64_Phdr** alloc_ph(int nr_phdr) 
+{
     return (Elf64_Phdr **)calloc(sizeof(Elf64_Phdr *), nr_phdr);
 }
 
@@ -156,7 +166,8 @@ Elf64_Phdr** alloc_ph(int nr_phdr) {
     Analyses from an input path binary
     @s: pointer to the binary's path
 */
-mdata_binary_t* init_analysis(const char *s) {
+mdata_binary_t* init_analysis(const char *s) 
+{
     struct stat st;
 
     __builtin_cpu_init();
@@ -270,7 +281,8 @@ mdata_binary_t* init_analysis(const char *s) {
 /*
     Actual destructor for the mdata_binary_t object
 */
-int end_analysis(mdata_binary_t *s_binary) {
+int end_analysis(mdata_binary_t *s_binary) 
+{
     if (s_binary->dbi_handler->state) {
         if (s_binary->dbi_handler->state->sse) {
             _mm_free(s_binary->dbi_handler->state->sse);
@@ -332,7 +344,8 @@ int end_analysis(mdata_binary_t *s_binary) {
     @base_auxvt: base address for the auxilary vector entries
     @val: value we want to write according to @id at the end of the auxvt array
 */
-int add_auxvt(uint64_t id, uint64_t *base_auxvt, uint64_t val) {
+int add_auxvt(uint64_t id, uint64_t *base_auxvt, uint64_t val) 
+{
     int i_target = 0;
 
     for ( ; base_auxvt[i_target] || base_auxvt[i_target+1]; i_target++);

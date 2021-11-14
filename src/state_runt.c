@@ -73,8 +73,9 @@ const uint64_t x86_reg_c[] = {
 	X86_REG_ENDING		// <-- mark the end of the list of registers
 };
 
-hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
-    hashmap->value = calloc(1, (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])) * sizeof(uint64_t* ));
+hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) 
+{
+    hashmap->value = (uint64_t** )calloc(1, (sizeof(x86_reg_c) / sizeof(x86_reg_c[0])) * sizeof(uint64_t* ));
 
     for (size_t i = 0; x86_reg_c[i] != X86_REG_ENDING; i++) { // iter through all the elem
         hashmap->value[x86_reg_c[i]] = &(s_binary->dbi_handler->state->null_entry);
@@ -125,51 +126,59 @@ hashmap_t* init_hashmap(hashmap_t* hashmap, mdata_binary_t* s_binary) {
 }
 
 // free hashmap
-int free_hashmap(hashmap_t* hashmap) {
+int free_hashmap(hashmap_t* hashmap) 
+{
     free(hashmap->value);
     
     return 0;
 }
 
 // it will be quite long and boring but I will code some wrappers around the update_<reg>() functions
-void update_reg(int key, hashmap_t* hashmap, uint64_t value) {
+void update_reg(int key, hashmap_t* hashmap, uint64_t value) 
+{
     *(hashmap->value[key]) = value;
 }
 
-_Bool is_8bits_right(int reg) {
+_Bool is_8bits_right(int reg) 
+{
     return (reg == X86_REG_AL) || (reg == X86_REG_BL) || (reg == X86_REG_CL)
                              || (reg == X86_REG_DL) || (reg == X86_REG_DIL) || (reg == X86_REG_SIL) || (reg == X86_REG_BPL) || (reg == X86_REG_SPL)
                              || (reg == X86_REG_R8B) || (reg == X86_REG_R9B) || (reg == X86_REG_R10B) || (reg == X86_REG_R11B) || (reg == X86_REG_R12B) || (reg == X86_REG_R13B)
                              || (reg == X86_REG_R14B) || (reg == X86_REG_R15B);
 }
 
-_Bool is_8bits_left(int reg) {
+_Bool is_8bits_left(int reg) 
+{
     return (reg == X86_REG_AH) || (reg == X86_REG_BH) || (reg == X86_REG_CH)
                              || (reg == X86_REG_DH);
 }
 
-_Bool is_16bits(int reg) {
+_Bool is_16bits(int reg) 
+{
     return (reg == X86_REG_AX) || (reg == X86_REG_BX) || (reg == X86_REG_CX) || (reg == X86_REG_DX) || (reg == X86_REG_SI) 
                              || (reg == X86_REG_DI) || (reg == X86_REG_BP) || (reg == X86_REG_SP) || (reg == X86_REG_R8W) || (reg == X86_REG_R9W)
                              || (reg == X86_REG_R10W) || (reg == X86_REG_R11W) || (reg == X86_REG_R12W) || (reg == X86_REG_R13W)
                              || (reg == X86_REG_R14W) || (reg == X86_REG_R15W);
 }
 
-_Bool is_32bits(int reg) {
+_Bool is_32bits(int reg) 
+{
     return (reg == X86_REG_EAX) || (reg == X86_REG_EBX) || (reg == X86_REG_ECX) || (reg == X86_REG_EDX) || (reg == X86_REG_ESI)
                              || (reg == X86_REG_EDI) || (reg == X86_REG_EBP) || (reg == X86_REG_ESP) || (reg == X86_REG_R8D) || (reg == X86_REG_R9D)
                              || (reg == X86_REG_R10D) || (reg == X86_REG_R11D) || (reg == X86_REG_R12D) || (reg == X86_REG_R13D)
                              || (reg == X86_REG_R14D) || (reg == X86_REG_R15D) || (reg == X86_REG_EIP);
 }
 
-_Bool is_64bits(int reg) {
+_Bool is_64bits(int reg) 
+{
     return (reg == X86_REG_RAX) || (reg == X86_REG_RBX) || (reg == X86_REG_RCX) || (reg == X86_REG_RDX) || (reg == X86_REG_RSI)
                              || (reg == X86_REG_RDI) || (reg == X86_REG_RBP) || (reg == X86_REG_RSP) || (reg == X86_REG_R8) || (reg == X86_REG_R9)
                              || (reg == X86_REG_R10) || (reg == X86_REG_R11) || (reg == X86_REG_R12) || (reg == X86_REG_R13)
                              || (reg == X86_REG_R14) || (reg == X86_REG_R15) || (reg == X86_REG_EFLAGS) || (reg == X86_REG_RIP);
 }
 
-_Bool is_128bits(int reg) {
+_Bool is_128bits(int reg) 
+{
     return (reg == X86_REG_XMM0) || (reg == X86_REG_XMM1) || (reg == X86_REG_XMM2) || (reg == X86_REG_XMM3) || (reg == X86_REG_XMM4) ||
             (reg == X86_REG_XMM5) || (reg == X86_REG_XMM6) || (reg == X86_REG_XMM7) || (reg == X86_REG_XMM8) || (reg == X86_REG_XMM9) || 
             (reg == X86_REG_XMM10) || (reg == X86_REG_XMM11) || (reg == X86_REG_XMM12) || (reg == X86_REG_XMM13) || (reg == X86_REG_XMM14) ||
@@ -179,7 +188,8 @@ _Bool is_128bits(int reg) {
             (reg == X86_REG_XMM30) || (reg == X86_REG_XMM31);
 }
 
-_Bool is_256bits(int reg) {
+_Bool is_256bits(int reg) 
+{
     return (reg == X86_REG_YMM0) || (reg == X86_REG_YMM1) || (reg == X86_REG_YMM2) || (reg == X86_REG_YMM3) || (reg == X86_REG_YMM4) ||
             (reg == X86_REG_YMM5) || (reg == X86_REG_YMM6) || (reg == X86_REG_YMM7) || (reg == X86_REG_YMM8) || (reg == X86_REG_YMM9) || 
             (reg == X86_REG_YMM10) || (reg == X86_REG_YMM11) || (reg == X86_REG_YMM12) || (reg == X86_REG_YMM13) || (reg == X86_REG_YMM14) ||
@@ -189,7 +199,8 @@ _Bool is_256bits(int reg) {
             (reg == X86_REG_YMM30) || (reg == X86_REG_YMM31);
 }
 
-_Bool is_512bits(int reg) {
+_Bool is_512bits(int reg) 
+{
     return (reg == X86_REG_ZMM0) || (reg == X86_REG_ZMM1) || (reg == X86_REG_ZMM2) || (reg == X86_REG_ZMM3) || (reg == X86_REG_ZMM4) ||
             (reg == X86_REG_ZMM5) || (reg == X86_REG_ZMM6) || (reg == X86_REG_ZMM7) || (reg == X86_REG_ZMM8) || (reg == X86_REG_ZMM9) || 
             (reg == X86_REG_ZMM10) || (reg == X86_REG_ZMM11) || (reg == X86_REG_ZMM12) || (reg == X86_REG_ZMM13) || (reg == X86_REG_ZMM14) ||
@@ -199,7 +210,8 @@ _Bool is_512bits(int reg) {
             (reg == X86_REG_ZMM30) || (reg == X86_REG_ZMM31);
 }
 
-uint64_t read_reg(int key, hashmap_t* hashmap) {
+uint64_t read_reg(int key, hashmap_t* hashmap) 
+{
     if (is_8bits_right(key)) {
         return (*(hashmap->value[key]) & 0xff);
     } else if (is_8bits_left(key)) {
@@ -215,8 +227,9 @@ uint64_t read_reg(int key, hashmap_t* hashmap) {
     return -1;
 }
 
-void prnt_large(uint8_t* integer, int count, FILE* stream) {
-    int64_t *iter = calloc(1, count *  sizeof(int64_t));
+void prnt_large(uint8_t* integer, int count, FILE* stream) 
+{
+    int64_t *iter = (int64_t* )calloc(1, count *  sizeof(int64_t));
     memcpy(iter, integer, count *  sizeof(int64_t));
 
     fprintf(stream, "{");
@@ -233,15 +246,18 @@ void prnt_large(uint8_t* integer, int count, FILE* stream) {
     
 }
 
-void prnt_uint128(__m128i integer, FILE* stream) {
+void prnt_uint128(__m128i integer, FILE* stream) 
+{
     prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t), stream);
 }
 
-void prnt_uint256(__m256i integer, FILE* stream) {
+void prnt_uint256(__m256i integer, FILE* stream) 
+{
     prnt_large((uint8_t* )&integer, sizeof(integer) / sizeof(int64_t), stream);
 }
 
-void log_sse(state_rtime_t* state, FILE* stream) {
+void log_sse(state_rtime_t* state, FILE* stream) 
+{
     fprintf(stream, "$xmm0\t ");
     prnt_uint128(state->sse->xmm0, stream);
     fprintf(stream, "\n$xmm1\t ");
@@ -276,7 +292,8 @@ void log_sse(state_rtime_t* state, FILE* stream) {
     prnt_uint128(state->sse->xmm15, stream);
 }
 
-void log_avx2(state_rtime_t* state, FILE* stream) {
+void log_avx2(state_rtime_t* state, FILE* stream) 
+{
     fprintf(stream, "\n$ymm0\t ");
     prnt_uint256(state->avx2->ymm0, stream);
     fprintf(stream, "\n$ymm1\t ");
@@ -312,7 +329,8 @@ void log_avx2(state_rtime_t* state, FILE* stream) {
     fprintf(stream, "\n");
 }
 
-void log_general(state_rtime_t* state, FILE* stream) {
+void log_general(state_rtime_t* state, FILE* stream) 
+{
     fprintf(stream, "$rax\t {%lx}\n", state->rax);
     fprintf(stream, "$rbx\t {%lx}\n", state->rbx);
     fprintf(stream, "$rcx\t {%lx}\n", state->rcx);
@@ -333,8 +351,8 @@ void log_general(state_rtime_t* state, FILE* stream) {
     fprintf(stream, "$rflags\t {%lx}\n", state->rflags);
 }
 
-void log_regs(mdata_binary_t* s_binary, FILE* stream) {
-
+void log_regs(mdata_binary_t* s_binary, FILE* stream) 
+{
     log_general(s_binary->dbi_handler->state, stream);
 
     if (s_binary->dbi_handler->state->sse) {

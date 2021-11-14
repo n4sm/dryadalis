@@ -20,6 +20,8 @@
 
 #include "kernel_list.h"
 
+int insn_count;
+
 // define
 
 #define OPT_BBL 0x0
