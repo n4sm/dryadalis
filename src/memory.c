@@ -145,10 +145,9 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 {
     mem_map_t* _mem_desc = NULL;
 
-	if (!is_mapped_range(s_binary, from, size) && is_mapped_range(s_binary, PAGE_ALIGN(from), size)) {
-        size = size - PAGE_OFFT((size + from));
-        printf("je fais de la merde eheh\n");
-	}
+	if (!is_mapped_range(s_binary, from, size)) {
+        return -1;
+    }
 
     if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
     	fprintf(stderr, "> @mem_read > @make_readable, from: %lx, size: %lx\n", from, size);
@@ -177,13 +176,14 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
     mem_map_t* _mem_desc = NULL;
 
 	if (!is_mapped_range(s_binary, to, size) && is_mapped_range(s_binary, PAGE_ALIGN(to), size)) {
-        size = size - PAGE_OFFT((size + to));
+        fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
+        fatal_dump(s_binary);        
 	}
 
-	if (!is_mapped(PAGE_ALIGN(to), s_binary)) {
-        fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
-        fatal_dump(s_binary);
-	}
+	// if (!is_mapped(PAGE_ALIGN(to), s_binary)) {
+    //     fprintf(stderr, "> @mem_write > @is_mapped, from: %lx, size: %lx\n", to, size);
+    //     fatal_dump(s_binary);
+	// }
 
     if (-1 == (long)(_mem_desc = make_writable(s_binary, to, size))) {
    		fprintf(stderr, "> @mem_write > @make_readable, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);

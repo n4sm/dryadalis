@@ -57,7 +57,7 @@ void fatal_dump(mdata_binary_t* s_binary)
 
     fprintf(stderr, "[FATAL] exit(-1)\n");
 
-    exit(-1); 
+    s_binary->dbi_handler->dtor();
 }
 
 uint64_t mxcsr;

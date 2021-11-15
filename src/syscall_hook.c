@@ -28,12 +28,33 @@
 
 _Bool must_change;
 
+// :)
+/*
+    do_syscall macro - executes a syscall according to the given arguments, updates state->rax with the syscall's return value
+    @__VA_ARGS__: syscall arguments
+*/
+#define do_syscall(...) \
+    if (-1 == set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) { \
+        fprintf(stderr, "FATAL arch_prctl\n"); \
+        fatal_dump(s_binary); \
+    } \
+    \
+    state->rax = syscall(__VA_ARGS__); \
+    \
+    if (-1 == set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) { \
+        fprintf(stderr, "FATAL arch_prctl\n"); \
+        fatal_dump(s_binary); \
+    } \
+
+/* 
+    hook_brk - nothing to do except if it allocates a page, if this is the case we allocate one more page in the virtual memory map
+*/
 uint64_t hook_brk(mdata_binary_t* s_binary) 
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
     uint64_t _brk_base = syscall(__NR_brk, 0x0);
 
-    state->rax = syscall(__NR_brk, state->rdi);
+    do_syscall(__NR_brk, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
 
     if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
@@ -128,7 +149,7 @@ uint64_t hook_access(mdata_binary_t* s_binary)
     const char* filename = (const char* )state->rdi;
     int mode = state->rsi;
 
-    state->rax = syscall(__NR_access, filename, mode);
+    do_syscall(__NR_access, filename, mode);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] access (\"%s\", %x) = %ld\n", filename, mode, state->rax);
 
     return 0;
@@ -145,7 +166,7 @@ uint64_t hook_mmap(mdata_binary_t* s_binary)
     int fd = state->r8;
     int offt = state->r9;
 
-    state->rax = syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
+    do_syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
     if (-1 != state->rax && (!state->rdi || !is_mapped_range(s_binary, state->rdi, length))) {
@@ -164,7 +185,7 @@ uint64_t hook_writev(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_writev, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] writev (%lx, %lx, %lx)\n", state->rdi, state->rsi, state->rdx);
     
     return 0;
@@ -175,7 +196,7 @@ uint64_t hook_exit(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
-    // state->rax = syscall(__NR_exit, state->rdi);
+    // do_syscall(__NR_exit, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] exit (%lx)\n", state->rdi);
     dbi_handler->dtor();
     
@@ -197,7 +218,7 @@ uint64_t hook_openat(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_openat, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_openat, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] openat (%lx, \"%s\", %lx, %lx) = %ld\n", (long)state->rdi, (const char* )state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
@@ -206,7 +227,7 @@ uint64_t hook_openat(mdata_binary_t* s_binary)
 uint64_t hook_fstat(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_fstat, state->rdi, state->rsi);
+    do_syscall(__NR_fstat, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] fstat (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
@@ -222,7 +243,7 @@ uint64_t hook_close(mdata_binary_t* s_binary)
 
         state->rax = 0;
     } else {
-        state->rax = syscall(__NR_close, state->rdi);
+        do_syscall(__NR_close, state->rdi);
     }
     
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] close (%lx) = %ld\n", state->rdi, state->rax);
@@ -234,7 +255,7 @@ uint64_t hook_read(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_read, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_read, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] read (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
@@ -244,7 +265,7 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     if (-1 == update_vprot(s_binary, state->rdi, state->rsi, state->rdx)) {
@@ -259,7 +280,7 @@ uint64_t hook_pread64(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_pread64, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_pread64, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] pread64 (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
@@ -268,7 +289,7 @@ uint64_t hook_pread64(mdata_binary_t* s_binary)
 uint64_t hook_munmap(mdata_binary_t* s_binary) {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_munmap, state->rdi, state->rsi);
+    do_syscall(__NR_munmap, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
@@ -280,7 +301,7 @@ uint64_t hook_set_tid_address(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_set_tid_address, state->rdi);
+    do_syscall(__NR_set_tid_address, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] set_tid_address (%lx) = %ld\n", state->rdi, state->rax);
 
     return 0;
@@ -290,7 +311,7 @@ uint64_t hook_set_robust_list(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_set_robust_list, state->rdi, state->rsi);
+    do_syscall(__NR_set_robust_list, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] set_robust_list (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
@@ -300,7 +321,7 @@ uint64_t hook_rt_sigaction(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_rt_sigaction, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_rt_sigaction, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] set_rt_sigaction (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
@@ -310,7 +331,7 @@ uint64_t hook_rt_sigprocmask(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_rt_sigprocmask, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_rt_sigprocmask, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] set_rt_sigprocmask (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
@@ -320,7 +341,7 @@ uint64_t hook_prlimit64(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_prlimit64, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_prlimit64, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] prlimit64 (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
@@ -330,7 +351,7 @@ uint64_t hook_statfs(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_statfs, state->rdi, state->rsi);
+    do_syscall(__NR_statfs, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] statfs (\"%s\", %lx) = %ld\n", (const char* )state->rdi, state->rsi, state->rax);
 
     return 0;
@@ -340,7 +361,7 @@ uint64_t hook_stat(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_stat, state->rdi, state->rsi);
+    do_syscall(__NR_stat, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] statfs (\"%s\", %lx) = %ld\n", (const char* )state->rdi, state->rsi, state->rax);
 
     return 0;
@@ -350,7 +371,7 @@ uint64_t hook_getuid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_getuid, state->rdi);
+    do_syscall(__NR_getuid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] getuid () = %ld\n", state->rax);
 
     return 0;
@@ -360,7 +381,7 @@ uint64_t hook_geteuid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_geteuid, state->rdi);
+    do_syscall(__NR_geteuid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] geteuid () = %ld\n", state->rax);
 
     return 0;
@@ -370,7 +391,7 @@ uint64_t hook_getegid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_getegid, state->rdi);
+    do_syscall(__NR_getegid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] getegid () = %ld\n", state->rax);
 
     return 0;
@@ -380,7 +401,7 @@ uint64_t hook_getgid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_getgid, state->rdi);
+    do_syscall(__NR_getgid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] getgid () = %ld\n", state->rax);
 
     return 0;
@@ -390,7 +411,7 @@ uint64_t hook_futex(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_futex, state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9);
+    do_syscall(__NR_futex, state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] futex (%lx, %lx, %lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9, state->rax);
 
     return 0;
@@ -400,7 +421,7 @@ uint64_t hook_getpid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_getpid, state->rdi);
+    do_syscall(__NR_getpid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] getpid () = %ld\n", state->rax);
 
     return 0;
@@ -410,7 +431,7 @@ uint64_t hook_gettid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_gettid, state->rdi);
+    do_syscall(__NR_gettid, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] gettid () = %ld\n", state->rax);
 
     return 0;
@@ -420,7 +441,7 @@ uint64_t hook_tgkill(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_tgkill, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_tgkill, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] tgkill (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
@@ -430,7 +451,7 @@ uint64_t hook_socket(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_socket, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_socket, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] socket (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
@@ -440,7 +461,7 @@ uint64_t hook_connect(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_connect, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_connect, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] connect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
@@ -450,7 +471,7 @@ uint64_t hook_write(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_write, state->rdi, state->rsi, state->rdx);
+    do_syscall(__NR_write, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] write (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
     return 0;
@@ -460,7 +481,7 @@ uint64_t hook_sigaltstack(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    state->rax = syscall(__NR_sigaltstack, state->rdi, state->rsi);
+    do_syscall(__NR_sigaltstack, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] sigaltstack (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;

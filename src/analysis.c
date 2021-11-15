@@ -297,8 +297,14 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
                         assert(!PAGE_OFFT(s_binary->dbi_handler->base_guest_stack));
 
-                        uint64_t gap = s_binary->dbi_handler->base_guest_stack - PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
-                        if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp), gap)) {
+                        int gap = s_binary->dbi_handler->base_guest_stack - PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
+
+                        if (gap < 0) {
+                            printf("wtf ?? gap: %d, base_guest: %lx, rsp: %lx\n", gap, s_binary->dbi_handler->base_guest_stack, s_binary->dbi_handler->state->rsp);
+                            fatal_dump(s_binary);
+                        }
+
+                        if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp), (uint64_t)gap)) {
                             fprintf(stderr, "> @__eval_target > @is_mapped(rsp): failed to add stack pages\n");
                             fatal_dump(s_binary);
                         }
