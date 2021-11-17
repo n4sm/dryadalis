@@ -91,17 +91,16 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     size_t size = PAGE_SZ;
     int n = 0;
 
-    if (!is_mapped(PAGE_ALIGN((addr + size)), s_binary)) {
-        fprintf(stderr, "FATAL addr + size (%lx + %lx) is not mapped\n", addr, size-1);
-        return -1;
+    if (!is_mapped_range(s_binary, addr, size) && is_mapped_range(s_binary, addr, size - PAGE_OFFT(addr) - 1)) {
+        size -= PAGE_OFFT(addr);
     }
 
-    if (!is_mapped(addr, s_binary)) {
+    if (!is_mapped_range(s_binary, addr, size)) {
         fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
         return -1;
     }
 
-    if (-1 == mem_read(s_binary, insn_buffer, addr, PAGE_SZ)) {
+    if (-1 == mem_read(s_binary, insn_buffer, addr, size)) {
         fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
 		fatal_dump(s_binary);
     }

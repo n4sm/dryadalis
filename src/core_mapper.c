@@ -19,7 +19,7 @@ static char* _random = "fae5fff9bdaa059af959baedeac94d30";
 static char* s_arch = "x86_64\0"; 
 
 // gen random base address
-uint64_t base_address() 
+uint64_t base_address()
 {
     uint64_t ret = 0x0;
     int fd = 0;
@@ -139,8 +139,8 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments)
     }
 
     s_binary->exec_entry = (uint64_t)(s_binary->interp ? 
-                                                        (uint64_t)(s_binary->interp->pie ? s_binary->interp->base + s_binary->interp->eh->e_entry : s_binary->interp->eh->e_entry) 
-                                                       : (uint64_t)(s_binary->pie ? s_binary->base + s_binary->eh->e_entry : s_binary->eh->e_entry));
+                                                        (uint64_t)(s_binary->interp->pie ? (uint64_t)(s_binary->interp->base + s_binary->interp->eh->e_entry) : (uint64_t)s_binary->interp->eh->e_entry) 
+                                                       : (uint64_t)(s_binary->pie ? (uint64_t)(s_binary->base + s_binary->eh->e_entry) : (uint64_t)s_binary->eh->e_entry));
 
     fprintf(s_binary->debug_stream, "[*] %s mapped\n", s_binary->filename);
     merge_address_space(s_binary);
@@ -169,7 +169,8 @@ int map_val(uint64_t* arg, uint64_t* stack)
 }
 
 // maps auxvt from argc to stack up to NULL byte
-int map_auxvt(uint64_t* arg, uint64_t* stack) {
+int map_auxvt(uint64_t* arg, uint64_t* stack) 
+{
     for(int i = 0; arg[i] || arg[i+1]; i++)    stack[i] = arg[i];
     return 0;
 }

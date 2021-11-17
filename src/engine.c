@@ -710,10 +710,11 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt)
         hook->to_unmap = PAGE_ALIGN((hook->jmp + hook->length));
     }
 
-    if (!is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
-        fprintf(stderr, "PAGE IS NOT MAPPED\n");
-        return -1;
-    } else if (-1 == mem_read(s_binary, hook->orig_bytes, hook->jmp, hook->length)) {
+    // if (!is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
+    //     fprintf(stderr, "> @write_hook > is_mapped, hook->jmp: %lx,\n");
+    //     return -1;
+    // } else 
+    if (-1 == mem_read(s_binary, hook->orig_bytes, hook->jmp, hook->length)) {
         fprintf(stderr, "> @write_hook failed to read the bytes @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
         return -1;

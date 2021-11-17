@@ -135,7 +135,7 @@ int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, o
 }
 
 /*
-    mem_read - read @size bytes from @from to @to, if all the range is not mapped it reads all the mapped datas
+    mem_read - read @size bytes from @from to @to, if all the range is not mapped it reads all the mapped datas, returns the number of bytes readen
     @s_binary: object descriptor
     @to: buffer to get the bytes
     @from: pointer to which we read bytes
@@ -144,9 +144,12 @@ int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, o
 int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size) 
 {
     mem_map_t* _mem_desc = NULL;
+    memset(to, 0x90, size);
 
-	if (!is_mapped_range(s_binary, from, size)) {
-        return -1;
+    size += PAGE_OFFT(from);
+
+    while (!is_mapped_range(s_binary, PAGE_ALIGN(from), size)) {
+        size -= PAGE_SZ;
     }
 
     if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
@@ -161,7 +164,7 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 		fatal_dump(s_binary);
 	}	
 
-    return 0;
+    return size;
 }
 
 /*
