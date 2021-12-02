@@ -24,6 +24,29 @@
 
 #include "../include/dryadalis_x86.h"
 
+
+int parse_maps(mdata_binary_t* s_binary)
+{
+    uint64_t base, end = 0;
+    int prot = 0;
+    // char is_r, is_w, is_x, is_p, is_s = 0;
+    char is_r, is_w, is_x, is_p = 0;
+
+    // __asm__ __inline__ ("int3");
+
+    while (sscanf((const char* )s_binary->dbi_handler->maps, "%lx-%lx %c%c%c%c %*[^\n]\n", &base, &end, &is_r, &is_w, &is_x, &is_p) != EOF) {
+        // is_s = is_p == 's';
+
+        prot |= is_r == 'r' ? PROT_READ : 0;
+        prot |= is_x == 'x' ? PROT_EXEC : 0;
+        prot |= is_w == 'w' ? PROT_WRITE : 0;
+
+        list_add_map(s_binary, prot, base, end - base);
+    }
+
+    return 0;
+}
+
 /*
     Safe wrapper for mprotect, updates the sync field to false because that are internal operations, not guest mprotect
     @s_binary: binary descriptor
@@ -146,10 +169,9 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
     mem_map_t* _mem_desc = NULL;
     memset(to, 0x90, size);
 
-    size += PAGE_OFFT(from);
-
-    while (!is_mapped_range(s_binary, PAGE_ALIGN(from), size)) {
-        size -= PAGE_SZ;
+    if (!is_mapped_range(s_binary, PAGE_ALIGN(from), size + PAGE_OFFT(from))) {
+        fprintf(stderr, "> is_mapped_range > mem_read: %lx -> %lx\n", PAGE_ALIGN(from), size + PAGE_OFFT(from));
+        return -1;
     }
 
     if (-1 == (long)(_mem_desc = make_readable(s_binary, from, size))) {
@@ -162,7 +184,7 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
     if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(from))) {
 		fprintf(stderr, "> @mem_read > @restore_vprot, from: %lx, size: %lx, prot: %x\n", from, size, _mem_desc->prot);
 		fatal_dump(s_binary);
-	}	
+	}
 
     return size;
 }
@@ -198,7 +220,7 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
     if (-1 == restore_vprot(s_binary, size, _mem_desc, PAGE_OFFT(to))) {
         fprintf(stderr, "> @mem_write > @restore_vprot, from: %lx, size: %lx, prot: %x\n", (uint64_t)from, size, _mem_desc->prot);
         fatal_dump(s_binary);
-	};
+	}
 
 	return 0;
 }
@@ -216,6 +238,7 @@ int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary)
         fatal_dump(s_binary);
     }
 
-    list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
+    // list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
+    parse_maps(s_binary);
     return 0;
 }

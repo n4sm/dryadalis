@@ -266,7 +266,7 @@ typedef struct dbi_instr_s {
     request_t* request;
     persistent_t* persistent_hook;
     capstone_hanlder_t* cps_utils;
-    int8_t curr_instr_mode;
+    uint8_t* maps;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
@@ -481,6 +481,8 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary);
 
 
 /* memory */
+
+int parse_maps(mdata_binary_t* s_binary);
 
 /*
     Safe wrapper for mprotect with READ protections

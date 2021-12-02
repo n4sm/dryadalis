@@ -57,12 +57,14 @@ uint64_t hook_brk(mdata_binary_t* s_binary)
     do_syscall(__NR_brk, state->rdi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
 
-    if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
-        if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(_brk_base) + PAGE_SZ, PAGE_ROUND(((state->rax - _brk_base +1)))+1)) {
-            fprintf(stderr, "> @hook_brk > @list_add_map: prot: %x, size: %lx, addr: %lx\n", PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
-            fatal_dump(s_binary);
-        }
-    }
+    // if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
+    //     if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(_brk_base) + PAGE_SZ, PAGE_ROUND(((state->rax - _brk_base +1)))+1)) {
+    //         fprintf(stderr, "> @hook_brk > @list_add_map: prot: %x, size: %lx, addr: %lx\n", PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
+    //         fatal_dump(s_binary);
+    //     }
+    // }
+
+    parse_maps(s_binary);
 
     return 0;
 }
@@ -169,14 +171,16 @@ uint64_t hook_mmap(mdata_binary_t* s_binary)
     do_syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
 
-    if (-1 != state->rax && (!state->rdi || !is_mapped_range(s_binary, state->rdi, length))) {
-        list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
-    } else if (-1 != state->rax && (state->rcx & MAP_FIXED)) {
-        if (-1 == update_vprot(s_binary, addr, PAGE_ROUND(length)+1, prot)) {
-            fprintf(stderr, "> @hook_munmap: update_vprot failed: address: %lx, size: %lx, prot: %x\n", addr, length, prot);
-            fatal_dump(s_binary);
-        }
-    }
+    // if (-1 != state->rax && (!state->rdi || !is_mapped_range(s_binary, state->rdi, length))) {
+    //     list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
+    // } else if (-1 != state->rax && (state->rcx & MAP_FIXED)) {
+    //     if (-1 == update_vprot(s_binary, addr, PAGE_ROUND(length)+1, prot)) {
+    //         fprintf(stderr, "> @hook_munmap: update_vprot failed: address: %lx, size: %lx, prot: %x\n", addr, length, prot);
+    //         fatal_dump(s_binary);
+    //     }
+    // }
+
+    parse_maps(s_binary);
 
     return 0;
 }

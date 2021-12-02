@@ -257,9 +257,24 @@ mdata_binary_t* init_analysis(const char *s)
     s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
     s_binary->dbi_handler->cps_utils->instructions = NULL;
 
+    int fd = open("/proc/self/maps", O_RDONLY);
+    struct stat stat_maps = {0};
+
+    if (fstat(fd, &stat_maps)) {
+        fprintf(stderr, "> @fstat has failed\n");
+        return (mdata_binary_t* )-1;
+    }
+
+    if (-1 == fd
+        || MAP_FAILED == 
+            (s_binary->dbi_handler->maps = mmap(0, stat_maps.st_size, PROT_READ, MAP_PRIVATE | MAP_FILE, fd, 0))) {
+        fprintf(stderr, "> @init_analysis > @open or @mmap failed, fd: %x\n", fd);
+        return (mdata_binary_t* )-1;
+    }
+
     if (!s_binary->dbi_handler->cps_utils->insn) {
         fprintf(stderr, "> @init_analysis > @cs_malloc\n");
-        fatal_dump(s_binary);
+        return (mdata_binary_t* )-1;
     }
 
     if (false == is_elf(s_binary->fbinary)) {
@@ -273,8 +288,9 @@ mdata_binary_t* init_analysis(const char *s)
     }
 
 
-    if (is_pie(s_binary->s_ph, (Elf64_Ehdr *)s_binary->fbinary))
+    if (is_pie(s_binary->s_ph, (Elf64_Ehdr *)s_binary->fbinary)) {
         s_binary->pie = true;
+    }
 
     return s_binary;
 }
@@ -316,6 +332,18 @@ int end_analysis(mdata_binary_t *s_binary)
     }
 
     if (-1 == munmap(s_binary->dbi_handler->host_rsp, 0x10000)) {
+        return -1;
+    }
+
+    int fd = open("/proc/self/maps", O_RDONLY);
+    struct stat stat_maps = {0};
+
+    if (fstat(fd, &stat_maps)) {
+        fprintf(stderr, "> @fstat has failed\n");
+        return -1;
+    }
+
+    if (-1 == munmap(s_binary->dbi_handler->maps, stat_maps.st_size)) {
         return -1;
     }
 

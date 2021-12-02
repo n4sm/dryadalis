@@ -55,19 +55,19 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
         if (MAP_FAILED == (s_binary->base = (uint8_t* )mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), sz, PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
             return -1;
         }
-        list_add_map(s_binary, 
-                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
-                (uint64_t)s_binary->base,
-                sz + 1); // fff + 1
+        // list_add_map(s_binary, 
+        //         PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
+        //         (uint64_t)s_binary->base,
+        //         sz + 1); // fff + 1
     } else {
         curr_map = (uint64_t)(s_binary->pie ? (uint64_t)s_binary->base + s_ph->p_vaddr : (uint64_t)s_ph->p_vaddr);
         if (MAP_FAILED == mmap((void *)PAGE_ALIGN(curr_map), PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))), PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset))) {
             return -1;
         }
-        list_add_map(s_binary,
-                PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
-                PAGE_ALIGN(curr_map),
-                sz + 1); // fff + 1
+        // list_add_map(s_binary,
+        //         PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags),
+        //         PAGE_ALIGN(curr_map),
+        //         sz + 1); // fff + 1
     }
 
     fprintf(s_binary->debug_stream, 
@@ -92,10 +92,10 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
             }
             
             fprintf(s_binary->debug_stream, "[*] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end))+1);
-            list_add_map(s_binary,
-                    PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
-                    map_end+1,
-                    PAGE_ROUND((bss_end - map_end))+1);
+            // list_add_map(s_binary,
+            //         PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
+            //         map_end+1,
+            //         PAGE_ROUND((bss_end - map_end))+1);
         }
     }
 
@@ -103,6 +103,8 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
     if (mprotect(curr_map ? (void *)PAGE_ALIGN(curr_map) : (void* )s_binary->base, PAGE_ROUND(s_ph->p_memsz), PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
         return -1;
     }
+
+    parse_maps(s_binary);
 
     return 0;
 }
@@ -197,7 +199,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
     s_binary->dbi_handler->base_guest_stack = (uint64_t)stack - 0x200000;
     s_binary->dbi_handler->state->rsp = (uint64_t)stack;
-    list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ)+1);
+    // list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN((s_binary->dbi_handler->state->rsp-0x5000)), PAGE_ROUND(STACK_SZ)+1);
 
     stack[0] = argc-1;
     map_val(&iter[1], &stack[1]);
@@ -227,6 +229,8 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
 
     add_auxvt(AT_NULL, &stack[idx], 0x0);
 
+    parse_maps(s_binary);
+
     return stack;
 }
 
@@ -239,7 +243,8 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
 _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) 
 {
     for (size_t i = 0; i < PAGE_ROUND(range) + 1; i += PAGE_SZ) {
-        if (!is_mapped(base + i - 1, s_binary)) {
+        if (!is_mapped(base + i, s_binary)) {
+            fprintf(stderr, "> is_mapped_range > %lx not mapped\n", base + i);
             return false;
         }
     }
@@ -254,16 +259,16 @@ _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range)
 */
 mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr) 
 {
-    mem_map_t* curr = s_binary->memory_map;
+    mem_map_t* curr = s_binary->memory_map ? s_binary->memory_map : s_binary->interp->memory_map;
     assert(curr);
 
     do {
         if (curr->addr == PAGE_ALIGN(addr)) return curr;
         curr = container_of(curr->list.next, mem_map_t, list);
-    } while (curr != s_binary->memory_map);
+    } while (curr != (s_binary->memory_map ? s_binary->memory_map : s_binary->interp->memory_map));
 
     if (DEBUG) fprintf(stderr, "> get_mem_desc: failed to get the memory descriptor for %lx\n", addr);
-    assert(curr == s_binary->memory_map);
+    assert(curr == (s_binary->memory_map ? s_binary->memory_map : s_binary->interp->memory_map));
 
     return (mem_map_t* )-1;
 }
@@ -439,12 +444,21 @@ int free_memory_map(mem_map_t* memory_map)
 // adds a mem_map_t according to the new mapping's arguments
 int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) 
 {
+    mem_map_t* _tmp_desc = NULL;
     if (size % PAGE_SZ || addr % PAGE_SZ) {
         fprintf(stderr, "Invalid size or addr > @list_add_map, size: %lx, addr: %lx\n", size, addr);
         return -1;
-    }
-    
+    }    
+
     for (uint64_t i = 0; i < size; i += PAGE_SZ) {
+        if (s_binary->memory_map && -1 != (_tmp_desc = get_mem_desc(s_binary, addr + i))) {
+            if (_tmp_desc->prot != prot) {
+                _tmp_desc->prot = prot;
+            } else {
+                continue;
+            }
+        }
+
         mem_map_t* curr = (mem_map_t* )malloc(sizeof(mem_map_t));
         curr->addr = PAGE_ALIGN(addr) + i;
         curr->size = PAGE_SZ;

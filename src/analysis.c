@@ -293,26 +293,28 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     // we emulate the call instruction
                     s_binary->dbi_handler->state->rsp -= 8;
 
-                    if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
-                        assert(!PAGE_OFFT(s_binary->dbi_handler->base_guest_stack));
+                    // if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
+                    //     assert(!PAGE_OFFT(s_binary->dbi_handler->base_guest_stack));
 
-                        int gap = s_binary->dbi_handler->base_guest_stack - PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
+                    //     int gap = s_binary->dbi_handler->base_guest_stack - PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
 
-                        if (gap < 0) {
-                            printf("wtf ?? gap: %d, base_guest: %lx, rsp: %lx\n", gap, s_binary->dbi_handler->base_guest_stack, s_binary->dbi_handler->state->rsp);
-                            fatal_dump(s_binary);
-                        }
+                    //     if (gap < 0) {
+                    //         printf("wtf ?? gap: %d, base_guest: %lx, rsp: %lx\n", gap, s_binary->dbi_handler->base_guest_stack, s_binary->dbi_handler->state->rsp);
+                    //         fatal_dump(s_binary);
+                    //     }
 
-                        if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp), (uint64_t)gap)) {
-                            fprintf(stderr, "> @__eval_target > @is_mapped(rsp): failed to add stack pages\n");
-                            fatal_dump(s_binary);
-                        }
-                        s_binary->dbi_handler->base_guest_stack = PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
+                    //     // if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp), (uint64_t)gap)) {
+                    //     //     fprintf(stderr, "> @__eval_target > @is_mapped(rsp): failed to add stack pages\n");
+                    //     //     fatal_dump(s_binary);
+                    //     // }
 
-                        fprintf(s_binary->debug_stream, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
-                        // return -1;
-                    }
+                    //     s_binary->dbi_handler->base_guest_stack = PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
 
+                    //     fprintf(s_binary->debug_stream, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
+                    //     // return -1;
+                    // }
+
+                    parse_maps(s_binary);
                     *(uint64_t* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
                     achieve = true;
                 }

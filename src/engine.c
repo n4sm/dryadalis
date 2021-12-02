@@ -498,7 +498,7 @@ _Bool parse_request(mdata_binary_t* s_binary, request_t* request, uint64_t base_
             return ((request->address >= base_bbl) && (request->address <= s_binary->dbi_handler->dump->jmp)) ? true : false;
 
         case INSTRUMENT_BBL:
-            return false;
+            return true;
 
         default:
             return false;
@@ -594,49 +594,63 @@ int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hoo
     return 0;
 }
 
-// it writes the dump hook and sets the right mode (INSTRUMENT_ADDR / INSTRUMENT_BBL)
+/* 
+    instrument_request - It writes the dump hook and sets the right mode (INSTRUMENT_ADDR / INSTRUMENT_BBL)
+
+    @s_binary: object descriptor
+    @base_bbl: target basic block base address
+*/
 int instrument_request(mdata_binary_t* s_binary, uint64_t base_bbl) 
 {
-    if (s_binary->dbi_handler->persistent_hook->state) {
-        if (-1 == instrument_persistent(s_binary, s_binary->dbi_handler->persistent_hook)) {
-            fprintf(s_binary->debug_stream, "FATAL instrument_persistent\n");
-            fatal_dump(s_binary);
-        }
-    } else if (s_binary->dbi_handler->request->type == INSTRUMENT_ADDR_ONLY) {
-        if (is_mapped(s_binary->dbi_handler->request->address, s_binary)) {
-            s_binary->dbi_handler->dump->jmp = s_binary->dbi_handler->request->address;
-            if (-1 == write_hook(s_binary, s_binary->dbi_handler->dump, WRITE_HOOK_RAW)) {
-                fprintf(stderr, "FATAL instrument_request\n");
-                return -1;
-            }
+    // if (s_binary->dbi_handler->persistent_hook->state) {
+    //     if (-1 == instrument_persistent(s_binary, s_binary->dbi_handler->persistent_hook)) {
+    //         fprintf(s_binary->debug_stream, "FATAL instrument_persistent\n");
+    //         fatal_dump(s_binary);
+    //     }
+    // } else if (s_binary->dbi_handler->request->type == INSTRUMENT_ADDR_ONLY) {
+    //     if (is_mapped(s_binary->dbi_handler->request->address, s_binary)) {
+    //         s_binary->dbi_handler->dump->jmp = s_binary->dbi_handler->request->address;
+    //         if (-1 == write_hook(s_binary, s_binary->dbi_handler->dump, WRITE_HOOK_RAW)) {
+    //             fprintf(stderr, "FATAL instrument_request\n");
+    //             return -1;
+    //         }
 
-            log_persistent_hook(s_binary, s_binary->dbi_handler->request->address);
-            s_binary->dbi_handler->take_callback = true;
-        } else {
-            fatal_dump(s_binary);
-        }
-    } else {
-        *(s_binary->dbi_handler->curr_hook) = base_bbl + _instrument_bbl(s_binary, s_binary->dbi_handler->dump, base_bbl);
+    //         log_persistent_hook(s_binary, s_binary->dbi_handler->request->address);
+    //         s_binary->dbi_handler->take_callback = true;
+    //     } else {
+    //         fatal_dump(s_binary);
+    //     }
+    // } else {
+    //     *(s_binary->dbi_handler->curr_hook) = base_bbl + _instrument_bbl(s_binary, s_binary->dbi_handler->dump, base_bbl);
 
-        if ((s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request, base_bbl))) {
-            if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) 
-                || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
-                fprintf(stderr, "FATAL restore_bytes # dump\n");
-                fatal_dump(s_binary);
-            }
-            s_binary->dbi_handler->dump->to_unmap = 0x0;
+    //     if ((s_binary->dbi_handler->take_callback = parse_request(s_binary, s_binary->dbi_handler->request, base_bbl))) {
+    //         if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) 
+    //             || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
+    //             fprintf(stderr, "FATAL restore_bytes # dump\n");
+    //             fatal_dump(s_binary);
+    //         }
+    //         s_binary->dbi_handler->dump->to_unmap = 0x0;
 
-            s_binary->dbi_handler->dump->jmp = s_binary->dbi_handler->request->address;
-            if (-1 == write_hook(s_binary, s_binary->dbi_handler->dump, WRITE_HOOK_FULL)) {
-                fprintf(stderr, "FATAL instrument_request\n");
-                return -1;
-            }
+    //         s_binary->dbi_handler->dump->jmp = s_binary->dbi_handler->request->address;
+    //         if (-1 == write_hook(s_binary, s_binary->dbi_handler->dump, WRITE_HOOK_FULL)) {
+    //             fprintf(stderr, "FATAL instrument_request\n");
+    //             return -1;
+    //         }
 
-            s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_ADDR;
-        } else {
-            s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_BBL;
-        }
-    }
+    //         s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_ADDR;
+    //     } else {
+    //         s_binary->dbi_handler->curr_instr_mode = INSTRUMENT_BBL;
+    //     }
+    // }
+
+    // s_binary->dbi_handler->restore->jmp = base_bbl - s_binary->dbi_handler->restore->length;
+    // *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
+    // if (-1 == write_hook(s_binary, s_binary->dbi_handler->restore, WRITE_HOOK_RAW)) {
+    //     fprintf(stderr, "FATAL write_hook # restore\n");
+    //     fatal_dump(s_binary);
+    // }
+
+    *(s_binary->dbi_handler->curr_hook) = base_bbl + _instrument_bbl(s_binary, s_binary->dbi_handler->dump, base_bbl);
 
     s_binary->dbi_handler->restore->jmp = base_bbl - s_binary->dbi_handler->restore->length;
     *(s_binary->dbi_handler->curr_hook) = s_binary->dbi_handler->dump->jmp;
@@ -709,11 +723,6 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt)
 
         hook->to_unmap = PAGE_ALIGN((hook->jmp + hook->length));
     }
-
-    // if (!is_mapped(hook->jmp + PAGE_SZ, s_binary)) {
-    //     fprintf(stderr, "> @write_hook > is_mapped, hook->jmp: %lx,\n");
-    //     return -1;
-    // } else 
     if (-1 == mem_read(s_binary, hook->orig_bytes, hook->jmp, hook->length)) {
         fprintf(stderr, "> @write_hook failed to read the bytes @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
@@ -796,36 +805,47 @@ uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr)
     return target;
 }
 
+/*
+    _get_bbl_base - compute the base addres of the next basic block we want to instrument 
+
+    s_binary: object descriptor
+*/
 uint64_t _get_bbl_base(mdata_binary_t* s_binary) 
 {
-    switch (s_binary->dbi_handler->curr_instr_mode) {
-        case INSTRUMENT_BBL:
-            return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+    // switch (s_binary->dbi_handler->curr_instr_mode) {
+    //     case INSTRUMENT_BBL:
+    return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
 
-        case INSTRUMENT_ADDR:
-            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
-                // we check if that's the end of a basic block if so we emulate the br instruction
-                return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
-            } else {
-                // else we're in a basic block so the begin of the new bbl the right after the last executed instruction 
-                return *s_binary->dbi_handler->curr_hook;
-            }
+    //     case INSTRUMENT_ADDR:
+    //         if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
+    //             // we check if that's the end of a basic block if so we emulate the br instruction
+    //             return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+    //         } else {
+    //             // else we're in a basic block so the begin of the new bbl the right after the last executed instruction 
+    //             return *s_binary->dbi_handler->curr_hook;
+    //         }
 
-        case INSTRUMENT_ADDR_ONLY:
-            if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
-                // we check if that's the end of a basic block if so we emulate the br instruction
-                return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
-            } else {
-                // else we're in a basic block so the begin of the new bbl the right after the last executed instruction
-                fprintf(s_binary->debug_stream, "curr_hook: 0x%lx\n", *s_binary->dbi_handler->curr_hook);
-                return *s_binary->dbi_handler->curr_hook;
-            }            
+    //     case INSTRUMENT_ADDR_ONLY:
+    //         if (!opcodes_cflow(s_binary->dbi_handler->request->address, s_binary, true)) {
+    //             // we check if that's the end of a basic block if so we emulate the br instruction
+    //             return br_emulation(s_binary, *s_binary->dbi_handler->curr_hook);
+    //         } else {
+    //             // else we're in a basic block so the begin of the new bbl the right after the last executed instruction 
+    //             return *s_binary->dbi_handler->curr_hook;
+    //         }         
 
-        default:
-            return -1;
-    }
+    //     default:
+    //         return -1;
+    // }
 }
 
+/*
+    _dispatcher - main internal callback, called every time a basic block is reached
+        - set the right values for $fs and $gs
+        - restore the bytes overwritten by the restore stub and unmap the newly 
+
+    s_binary: object descriptor
+*/
 void _dispatcher(mdata_binary_t* s_binary) 
 {
     if (-1 == save_fs_gs(&s_binary->dbi_handler->instrumented_fs, &s_binary->dbi_handler->instrumented_gs)) {
@@ -835,13 +855,17 @@ void _dispatcher(mdata_binary_t* s_binary)
         fprintf(stderr, "FATAL arch_prctl\n");
         fatal_dump(s_binary);
     }
-    
-    s_binary->dbi_handler->u_handler(s_binary);
+
+    if (s_binary->dbi_handler->take_callback) {
+        s_binary->dbi_handler->u_handler(s_binary);
+    }
 
     if (s_binary->dbi_handler->restore->jmp) {
         if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) \
-            || (s_binary->dbi_handler->restore->to_unmap && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
-            fprintf(stderr, "FATAL restore_bytes # restore\n");
+            || (s_binary->dbi_handler->restore->to_unmap 
+                                                         && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
+            
+            fprintf(stderr, "> _dispatcher > @restore_bytes or @unmap failed\n");
             fatal_dump(s_binary);
         }
     }
@@ -875,6 +899,12 @@ void _dispatcher(mdata_binary_t* s_binary)
     continue_exec(s_binary);
 }
 
+
+/*
+    continue_exec - continue the execution by jumping on the , set back the $fs and $gs registers
+
+    s_binary: object descriptor
+*/
 void continue_exec(mdata_binary_t* s_binary) 
 {
     if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
