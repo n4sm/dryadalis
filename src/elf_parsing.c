@@ -257,20 +257,7 @@ mdata_binary_t* init_analysis(const char *s)
     s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
     s_binary->dbi_handler->cps_utils->instructions = NULL;
 
-    int fd = open("/proc/self/maps", O_RDONLY);
-    struct stat stat_maps = {0};
-
-    if (fstat(fd, &stat_maps)) {
-        fprintf(stderr, "> @fstat has failed\n");
-        return (mdata_binary_t* )-1;
-    }
-
-    if (-1 == fd
-        || MAP_FAILED == 
-            (s_binary->dbi_handler->maps = mmap(0, stat_maps.st_size, PROT_READ, MAP_PRIVATE | MAP_FILE, fd, 0))) {
-        fprintf(stderr, "> @init_analysis > @open or @mmap failed, fd: %x\n", fd);
-        return (mdata_binary_t* )-1;
-    }
+    s_binary->dbi_handler->fd_maps = fopen("/proc/self/maps", "r");
 
     if (!s_binary->dbi_handler->cps_utils->insn) {
         fprintf(stderr, "> @init_analysis > @cs_malloc\n");
@@ -294,6 +281,7 @@ mdata_binary_t* init_analysis(const char *s)
 
     return s_binary;
 }
+
 /*
     Actual destructor for the mdata_binary_t object
 */
@@ -335,17 +323,17 @@ int end_analysis(mdata_binary_t *s_binary)
         return -1;
     }
 
-    int fd = open("/proc/self/maps", O_RDONLY);
-    struct stat stat_maps = {0};
+    // int fd = open("/proc/self/maps", O_RDONLY);
+    // struct stat stat_maps = {0};
 
-    if (fstat(fd, &stat_maps)) {
-        fprintf(stderr, "> @fstat has failed\n");
-        return -1;
-    }
+    // if (fstat(fd, &stat_maps)) {
+    //     fprintf(stderr, "> @fstat has failed\n");
+    //     return -1;
+    // }
 
-    if (-1 == munmap(s_binary->dbi_handler->maps, stat_maps.st_size)) {
-        return -1;
-    }
+    // if (-1 == munmap(s_binary->dbi_handler->maps, stat_maps.st_size)) {
+    //     return -1;
+    // }
 
     free(s_binary->dbi_handler->host_state);
     free(s_binary->dbi_handler->dump);

@@ -32,9 +32,10 @@ int parse_maps(mdata_binary_t* s_binary)
     // char is_r, is_w, is_x, is_p, is_s = 0;
     char is_r, is_w, is_x, is_p = 0;
 
-    // __asm__ __inline__ ("int3");
+    // fclose (s_binary->dbi_handler->fd_maps);
+    // s_binary->dbi_handler->fd_maps = fopen("/proc/self/maps", "r");
 
-    while (sscanf((const char* )s_binary->dbi_handler->maps, "%lx-%lx %c%c%c%c %*[^\n]\n", &base, &end, &is_r, &is_w, &is_x, &is_p) != EOF) {
+    while (fscanf(s_binary->dbi_handler->fd_maps, "%lx-%lx %c%c%c%c %*[^\n]\n", &base, &end, &is_r, &is_w, &is_x, &is_p) != EOF) {
         // is_s = is_p == 's';
 
         prot |= is_r == 'r' ? PROT_READ : 0;
@@ -239,6 +240,6 @@ int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary)
     }
 
     // list_add_map(s_binary, _prot, PAGE_ALIGN(addr), PAGE_SZ);
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
     return 0;
 }

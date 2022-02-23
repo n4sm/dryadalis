@@ -39,7 +39,7 @@ int insn_count;
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0X50000
-#define DEBUG false 
+#define DEBUG true
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1
@@ -266,7 +266,7 @@ typedef struct dbi_instr_s {
     request_t* request;
     persistent_t* persistent_hook;
     capstone_hanlder_t* cps_utils;
-    uint8_t* maps;
+    FILE* fd_maps;
 } dbi_instr_t;
 
 typedef struct mem_map_s {

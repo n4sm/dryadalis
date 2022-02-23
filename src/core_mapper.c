@@ -234,6 +234,8 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     return stack;
 }
 
+_Bool _internal_s;
+
 /*
     is_mapped_range - checks if a memory range is mapped  
     @s_binary: object descriptor
@@ -244,11 +246,20 @@ _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range)
 {
     for (size_t i = 0; i < PAGE_ROUND(range) + 1; i += PAGE_SZ) {
         if (!is_mapped(base + i, s_binary)) {
-            fprintf(stderr, "> is_mapped_range > %lx not mapped\n", base + i);
-            return false;
+            if (_internal_s) { 
+                fprintf(stderr, "> is_mapped_range > %lx not mapped\n", base + i);
+                _internal_s = false;
+                return false;
+            } else {
+                parse_maps(s_binary);
+                _internal_s = true;
+
+                return is_mapped_range(s_binary, base, range);
+            }
         }
     }
 
+    _internal_s = false;
     return true;
 }
 
@@ -399,7 +410,9 @@ _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary)
     mem_map_t* curr = NULL;
 
     if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
-        return false;
+        parse_maps(s_binary);
+
+        if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) return false;
     }
 
     return true;

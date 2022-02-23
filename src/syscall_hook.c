@@ -272,10 +272,12 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary)
     do_syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
-    if (-1 == update_vprot(s_binary, state->rdi, state->rsi, state->rdx)) {
-        fprintf(stderr, "> @hook_mprotect: failed to update_vprot\n");
-        fatal_dump(s_binary);
-    }
+    // if (-1 == update_vprot(s_binary, state->rdi, state->rsi, state->rdx)) {
+    //     fprintf(stderr, "> @hook_mprotect: failed to update_vprot\n");
+    //     fatal_dump(s_binary);
+    // }
+
+    parse_maps(s_binary);
 
     return 0;
 }

@@ -314,7 +314,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     //     // return -1;
                     // }
 
-                    parse_maps(s_binary);
+                    // parse_maps(s_binary);
                     *(uint64_t* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
                     achieve = true;
                 }
@@ -374,7 +374,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                 if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
                     fprintf(stderr, "FATAL arch_prctl\n");
                 }
-                
+
                 ret = sys_callback(s_binary);
 
                 if (set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
