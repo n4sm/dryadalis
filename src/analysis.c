@@ -91,6 +91,23 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     size_t size = PAGE_SZ;
     int n = 0;
 
+    if (!is_mapped(addr, s_binary)) {
+        fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
+        return -1;
+    }
+
+    /* overloapping instruction */
+    if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= 0x1000) {
+        /* We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes */
+        if (!is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
+            size = PAGE_SZ - PAGE_OFFT(addr);
+        } else {
+            size = PAGE_SZ;
+        }
+
+    }
+
+/*
     if (!is_mapped_range(s_binary, addr, size) && is_mapped_range(s_binary, addr, size - PAGE_OFFT(addr) - 1)) {
         size -= PAGE_OFFT(addr);
     }
@@ -99,6 +116,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
         return -1;
     }
+*/
 
     if (-1 == mem_read(s_binary, insn_buffer, addr, size)) {
         fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
@@ -127,13 +145,13 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         s_binary->dbi_handler->cps_utils->count++;
     }
 
-    if (is_mapped((addr), s_binary) && addr != saved_addr) {
+    if (is_mapped((saved_addr + n), s_binary) && addr != saved_addr) {
         // if the page next to the current page is mapped we call opcode_cflow onto it
         if (DEBUG) {
-            fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, addr - s_binary->dbi_handler->cps_utils->insn->size);
+            fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, saved_addr + n);
         }
 
-        return opcodes_cflow(addr, s_binary, true);
+        return opcodes_cflow(saved_addr + n, s_binary, true);
     }
 
     fprintf(stderr, "FATAL found nothing\n");

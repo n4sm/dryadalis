@@ -39,7 +39,7 @@ int insn_count;
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0X50000
-#define DEBUG true
+#define DEBUG false
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1
@@ -348,6 +348,7 @@ mem_map_t* get_mem_desc(mdata_binary_t* s_binary, uint64_t addr);
 int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size);
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range);
+_Bool is_mapped_flat(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_ro(uint64_t addr, mdata_binary_t* s_binary);
 _Bool is_rw(uint64_t addr, mdata_binary_t* s_binary);

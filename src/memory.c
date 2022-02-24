@@ -32,8 +32,8 @@ int parse_maps(mdata_binary_t* s_binary)
     // char is_r, is_w, is_x, is_p, is_s = 0;
     char is_r, is_w, is_x, is_p = 0;
 
-    // fclose (s_binary->dbi_handler->fd_maps);
-    // s_binary->dbi_handler->fd_maps = fopen("/proc/self/maps", "r");
+    fclose (s_binary->dbi_handler->fd_maps);
+    s_binary->dbi_handler->fd_maps = fopen("/proc/self/maps", "r");
 
     while (fscanf(s_binary->dbi_handler->fd_maps, "%lx-%lx %c%c%c%c %*[^\n]\n", &base, &end, &is_r, &is_w, &is_x, &is_p) != EOF) {
         // is_s = is_p == 's';
