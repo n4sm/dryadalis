@@ -159,7 +159,7 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 {
     int prot = 0;
     int k = 0;
-    memset(to, 0x90, size);
+    // memset(to, 0x90, size);
 
     if (!is_mapped_range(s_binary, PAGE_ALIGN(from), size + PAGE_OFFT(from))) {
         fprintf(stderr, "> is_mapped_range > mem_read: %lx -> %lx\n", PAGE_ALIGN(from), size + PAGE_OFFT(from));
@@ -189,7 +189,8 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 
     k = PAGE_SZ - PAGE_OFFT(from);
 
-    while (k <= size) {
+    while (k < size && k) {
+        printf("> %lx, size: %lx\n", k, size);
         prot = get_prot(s_binary, from + k);
 
         if (prot == -1) {
@@ -257,7 +258,7 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
 
     k = PAGE_SZ - PAGE_OFFT(to);
 
-    while (k <= size) {
+    while (k < size && k) {
         prot = get_prot(s_binary, to + k);
 
         if (prot == -1) {
