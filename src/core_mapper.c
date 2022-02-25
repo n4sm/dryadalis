@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <sys/ioctl.h>
 
 #include "../include/dryadalis_x86.h"
 
@@ -145,7 +146,7 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments)
                                                        : (uint64_t)(s_binary->pie ? (uint64_t)(s_binary->base + s_binary->eh->e_entry) : (uint64_t)s_binary->eh->e_entry));
 
     fprintf(s_binary->debug_stream, "[*] %s mapped\n", s_binary->filename);
-    merge_address_space(s_binary);
+    // merge_address_space(s_binary);
     return s_binary;
 }
 
@@ -234,8 +235,6 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     return stack;
 }
 
-_Bool _internal_s;
-
 /*
     is_mapped_range - checks if a memory range is mapped  
     @s_binary: object descriptor
@@ -245,20 +244,9 @@ _Bool _internal_s;
 _Bool is_mapped_range(mdata_binary_t* s_binary, uint64_t base, size_t range) 
 {
     for (size_t i = 0; i < PAGE_ROUND(range) + 1; i += PAGE_SZ) {
-        if (!is_mapped_flat(base + i, s_binary)) {
-            if (_internal_s) { 
-                fprintf(stderr, "> is_mapped_range > %lx not mapped\n", base + i);
-                return false;
-            } else {
-                parse_maps(s_binary);
-
-                for (size_t k = 0; k < PAGE_ROUND(range) + 1; k += PAGE_SZ) {
-                    if (!is_mapped_flat(base + k, s_binary)) {
-
-                        return false;
-                    }
-                }
-            }
+        if (!is_mapped(base + i, s_binary)) {
+            fprintf(stderr, "> is_mapped_range > %lx not mapped\n", base + i);
+            return false;
         }
     }
 
@@ -409,29 +397,28 @@ _Bool is_rx(uint64_t addr, mdata_binary_t* s_binary)
 // check if @addr argument is in the doubly linked list memory_map 
 _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary) 
 {
-    mem_map_t* curr = NULL;
+    umaps_request_t req = {.addr = addr, .size = PAGE_SZ};
 
-    if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
-        parse_maps(s_binary);
-
-        if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) return false;
+    if (-1 == ioctl(s_binary->dbi_handler->fd_umaps, UMAPS_IS_MAPPED, &req)) {
+        fprintf(stderr, "> @is_mapped: failed to check if %lx is mapped\n", addr);
+        fatal_dump(s_binary);
     }
 
-    return true;
+    return (_Bool)req.result;
 }
 
-// check if @addr argument is in the doubly linked list memory_map 
-_Bool is_mapped_flat(uint64_t addr, mdata_binary_t* s_binary) 
-{
-    mem_map_t* curr = NULL;
+// // check if @addr argument is in the doubly linked list memory_map 
+// _Bool is_mapped_flat(uint64_t addr, mdata_binary_t* s_binary) 
+// {
+//     mem_map_t* curr = NULL;
 
-    if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
-        fprintf(stderr, "> failed @is_mapped_flat\n");
-        return false;
-    }
+//     if (-1 == (long)(curr = get_mem_desc(s_binary, PAGE_ALIGN(addr)))) {
+//         fprintf(stderr, "> failed @is_mapped_flat\n");
+//         return false;
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 // merge the address space of the target binary and its linker.
 mem_map_t* merge_address_space(mdata_binary_t* s_binary) 
@@ -468,7 +455,7 @@ int free_memory_map(mem_map_t* memory_map)
 
     return 0;
 } 
-
+/*
 // adds a mem_map_t according to the new mapping's arguments
 int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t size) 
 {
@@ -514,6 +501,7 @@ int list_add_map(mdata_binary_t* s_binary, int prot, uint64_t addr, uint64_t siz
 
     return 0;
 }
+*/
 
 int list_del_map(mdata_binary_t* s_binary, uint64_t addr, uint32_t size) 
 {

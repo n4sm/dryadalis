@@ -266,7 +266,7 @@ typedef struct dbi_instr_s {
     request_t* request;
     persistent_t* persistent_hook;
     capstone_hanlder_t* cps_utils;
-    FILE* fd_maps;
+    int fd_umaps;
 } dbi_instr_t;
 
 typedef struct mem_map_s {
@@ -295,6 +295,16 @@ typedef struct mdata_binary_s {
 } mdata_binary_t;
 
 typedef uint64_t (*hook_syscall) (mdata_binary_t* s_binary);
+
+#define UMAPS_IS_MAPPED 0x1
+#define UMAPS_GET_PROT 0x10
+
+typedef struct umaps_request_s {
+  uint64_t pid;
+  uint64_t addr;
+  uint64_t size;
+  uint64_t result;
+} umaps_request_t;
 
 // macro
 
@@ -493,7 +503,7 @@ int parse_maps(mdata_binary_t* s_binary);
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+int make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
 
 /*
     Safe wrapper for mprotect with PROT_READ | PROT_WRITE protections
@@ -503,7 +513,7 @@ mem_map_t* make_readable(mdata_binary_t* s_binary, uint64_t address, ssize_t siz
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+int make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
 
 /*
     Safe wrapper for mprotect with PROT_READ | PROT_EXEC protections
@@ -513,7 +523,7 @@ mem_map_t* make_writable(mdata_binary_t* s_binary, uint64_t address, ssize_t siz
 
     returns -1 if it fails, else 0
 */
-mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
+int make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t size);
 
 /*
     restore_vprot - Restore the virtual protections for one or more pages
@@ -523,7 +533,7 @@ mem_map_t* make_executable(mdata_binary_t* s_binary, uint64_t address, ssize_t s
 
     returns -1 if it fails else 0
 */
-int restore_vprot(mdata_binary_t* s_binary, size_t size, mem_map_t* _mem_desc, off_t offset);
+int restore_vprot(mdata_binary_t* s_binary, size_t size, uint64_t addr, off_t offset);
 
 /*
     mem_read - read @size bytes from @from to @to

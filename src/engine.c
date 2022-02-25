@@ -53,7 +53,7 @@ void default_dtor(void)
 void fatal_dump(mdata_binary_t* s_binary) 
 {
     log_regs(s_binary, stderr);
-    log_map(s_binary->memory_map, stderr);
+    // log_map(s_binary->memory_map, stderr);
 
     fprintf(stderr, "[FATAL] exit(-1)\n");
 
@@ -779,13 +779,13 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary)
         fatal_dump(s_binary);
     }
 
-    if (hook->prot_restore) {
-        mem_map_t* _mem_desc = NULL;
-        if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, hook->jmp))
-            || -1 == restore_vprot(s_binary, hook->length, _mem_desc, PAGE_OFFT(hook->jmp))) {
-            fatal_dump(s_binary);
-        }
-    }
+    // if (hook->prot_restore) {
+    //     mem_map_t* _mem_desc = NULL;
+    //     if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, hook->jmp))
+    //         || -1 == restore_vprot(s_binary, hook->length, _mem_desc, PAGE_OFFT(hook->jmp))) {
+    //         fatal_dump(s_binary);
+    //     }
+    // }
 
     return 0;
 }
