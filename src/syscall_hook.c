@@ -64,7 +64,7 @@ uint64_t hook_brk(mdata_binary_t* s_binary)
     //     }
     // }
 
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
 
     return 0;
 }
@@ -180,7 +180,7 @@ uint64_t hook_mmap(mdata_binary_t* s_binary)
     //     }
     // }
 
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
 
     return 0;
 }
@@ -277,7 +277,7 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary)
     //     fatal_dump(s_binary);
     // }
 
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
 
     return 0;
 }
@@ -298,7 +298,7 @@ uint64_t hook_munmap(mdata_binary_t* s_binary) {
     do_syscall(__NR_munmap, state->rdi, state->rsi);
     if (DEBUG) fprintf(s_binary->debug_stream, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
-    list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
+    // list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
 
     return 0;
 }

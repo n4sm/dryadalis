@@ -20,8 +20,6 @@
 
 #include "kernel_list.h"
 
-int insn_count;
-
 // define
 
 #define OPT_BBL 0x0
@@ -39,7 +37,7 @@ int insn_count;
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0X50000
-#define DEBUG true
+#define DEBUG false
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1

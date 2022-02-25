@@ -24,6 +24,8 @@
 
 #include "../include/dryadalis_x86.h"
 
+int insn_count;
+
 /*  Dieu le Roy */
 
 int set_fs_gs(void* fs, void* gs) 

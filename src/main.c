@@ -14,7 +14,6 @@
 
 int test(void* s_binary) 
 {
-    insn_count++;
     return 0;
 }
 
@@ -24,7 +23,6 @@ int main(int argc, char **argv)
     insn_count = 0;
     arg_t arguments = {.argc = argc, .argv = argv};
     request_t req = {.callback = test, .address = 0x0, .type = INSTRUMENT_BBL};
-    // request_t req = {.callback = test, .address = 0x0, .type = INSTRUMENT_BBL};
     if (-1 == (long)(s_binary = map_binary(argv[1], &arguments))) {
         return -1;
     }
