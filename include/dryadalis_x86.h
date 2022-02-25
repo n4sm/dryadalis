@@ -561,4 +561,6 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size);
 */
 int map_page(uintptr_t addr, int _prot, mdata_binary_t* s_binary);
 
+int get_prot(mdata_binary_t* s_binary, uint64_t addr);
+
 #endif

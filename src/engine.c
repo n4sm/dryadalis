@@ -733,8 +733,8 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt)
         return -1;
     }
 
-    if (!(prot(s_binary, hook->jmp) & PROT_EXEC)) {
-        if (-1 == (long)make_executable(s_binary, hook->jmp, PAGE_OFFT((PAGE_SZ - hook->jmp)))) {
+    if (!(get_prot(s_binary, hook->jmp) & PROT_EXEC)) {
+        if (-1 == (long)make_executable(s_binary, PAGE_ALIGN(hook->jmp), PAGE_SZ)) {
             fprintf(stderr, "> @write_hook > @make_executable, hook->jmp: %lx, offt: %lx\n", hook->jmp, PAGE_OFFT((PAGE_SZ - hook->jmp)));
             fatal_dump(s_binary);
         }

@@ -205,14 +205,14 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
             }
         }
 
-        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((from + k)) <= k - size ? PAGE_SZ - PAGE_OFFT((from + k)) : k - size);
+        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((from + k)) <= size - k ? PAGE_SZ - PAGE_OFFT((from + k)) : size - k);
 
         if (-1 == mprotect((void*)PAGE_ALIGN((from + k)), PAGE_SZ, prot)) {
             fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN((from + k)));
             return -1;
         }
 
-        k += k + PAGE_SZ > size ? k - size : PAGE_SZ;
+        k += k + PAGE_SZ > size ? size - k : PAGE_SZ;
     }
 
     return size;
@@ -259,6 +259,7 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
     k = PAGE_SZ - PAGE_OFFT(to);
 
     while (k < size && k) {
+        printf("> write %lx, size: %lx\n", k, size);
         prot = get_prot(s_binary, to + k);
 
         if (prot == -1) {
@@ -273,14 +274,14 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
             }
         }
 
-        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((to + k)) <= k - size ? PAGE_SZ - PAGE_OFFT((to + k)) : k - size);
+        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((to + k)) <= size - k ? PAGE_SZ - PAGE_OFFT((to + k)) : size - k);
 
         if (-1 == mprotect((void*)PAGE_ALIGN((to + k)), PAGE_SZ, prot)) {
             fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN((to + k)));
             return -1;
         }
 
-        k += k + PAGE_SZ > size ? k - size : PAGE_SZ;
+        k += k + PAGE_SZ > size ? size - k : PAGE_SZ;
     }
 
     return size;
