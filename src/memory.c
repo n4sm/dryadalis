@@ -25,32 +25,6 @@
 
 #include "../include/dryadalis_x86.h"
 
-
-int parse_maps(mdata_binary_t* s_binary)
-{
-    // request_t request = {}
-
-    // uint64_t base, end = 0;
-    // int prot = 0;
-    // // char is_r, is_w, is_x, is_p, is_s = 0;
-    // char is_r, is_w, is_x, is_p = 0;
-
-    // fclose (s_binary->dbi_handler->fd_maps);
-    // s_binary->dbi_handler->fd_maps = fopen("/proc/self/maps", "r");
-
-    // while (fscanf(s_binary->dbi_handler->fd_maps, "%lx-%lx %c%c%c%c %*[^\n]\n", &base, &end, &is_r, &is_w, &is_x, &is_p) != EOF) {
-    //     // is_s = is_p == 's';
-
-    //     prot |= is_r == 'r' ? PROT_READ : 0;
-    //     prot |= is_x == 'x' ? PROT_EXEC : 0;
-    //     prot |= is_w == 'w' ? PROT_WRITE : 0;
-
-    //     list_add_map(s_binary, prot, base, end - base);
-    // }
-
-    return 0;
-}
-
 /*
     get_prot: Get the protection of a memory region
     @s_binary: The binary to get the protection from
@@ -159,41 +133,19 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 {
     int prot = 0;
     int k = 0;
+    uint64_t _sz = 0;
 
     if (!is_mapped_range(s_binary, PAGE_ALIGN(from), size + PAGE_OFFT(from))) {
         fprintf(stderr, "> is_mapped_range > mem_read: %lx -> %lx\n", PAGE_ALIGN(from), size + PAGE_OFFT(from));
         return -1;
     }
 
-    prot = get_prot(s_binary, from);
-
-    if (prot == -1) {
-        fprintf(stderr, "> @get_prot > @mem_read: %lx -> %lx\n", PAGE_ALIGN(from), size + PAGE_OFFT(from));
-        return -1;
-    }
-
-    if (!(prot & PROT_READ)) {
-        if (-1 == mprotect((void*)PAGE_ALIGN(from), PAGE_SZ, PROT_READ)) {
-            fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN(from));
-            return -1;
-        }
-    }
-
-    memcpy(to, (void*)from, PAGE_SZ - PAGE_OFFT(from) <= size ? PAGE_SZ - PAGE_OFFT(from) : size);
-
-    if (-1 == mprotect((void*)PAGE_ALIGN(from), PAGE_SZ, prot)) {
-        fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN(from));
-        return -1;
-    }
-
-    k = PAGE_SZ - PAGE_OFFT(from);
-
-    while (k < size && k) {
-        // printf("> %lx, size: %lx\n", k, size);
+    while (true) {
         prot = get_prot(s_binary, from + k);
+        _sz = (PAGE_SZ - PAGE_OFFT((from + k)) < size - k ? PAGE_SZ - PAGE_OFFT((from + k)) : size - k);
 
         if (prot == -1) {
-            fprintf(stderr, "> @get_prot > @mem_read: %lx\n", PAGE_ALIGN((from + k)));
+            fprintf(stderr, "> @get_prot > @mem_read: %lx -> %lx\n", PAGE_ALIGN((from + k)), size + PAGE_OFFT((from +k)));
             return -1;
         }
 
@@ -204,15 +156,22 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
             }
         }
 
-        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((from + k)) <= size - k ? PAGE_SZ - PAGE_OFFT((from + k)) : size - k);
+        memmove((void* )(to + k), (void*)(from + k), _sz);
 
         if (-1 == mprotect((void*)PAGE_ALIGN((from + k)), PAGE_SZ, prot)) {
             fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN((from + k)));
             return -1;
         }
 
-        k += k + PAGE_SZ > size ? size - k : PAGE_SZ;
+        if (k == size) {
+            break;
+        }
+
+        k += _sz;
     }
+
+    assert(k == size);
+    for (size_t i = 0; i < size; i++) assert (*((uint8_t* )(to + i)) == *((uint8_t* )(from + i)));
 
     return size;
 }
@@ -226,43 +185,22 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
 */
 int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size) 
 {
+    
     int prot = 0;
     int k = 0;
+    uint64_t _sz = 0;
 
     if (!is_mapped_range(s_binary, PAGE_ALIGN(to), size + PAGE_OFFT(to))) {
         fprintf(stderr, "> is_mapped_range > mem_read: %lx -> %lx\n", PAGE_ALIGN(to), size + PAGE_OFFT(to));
         return -1;
     }
 
-    prot = get_prot(s_binary, to);
-
-    if (-1 == prot) {
-        fprintf(stderr, "> @get_prot > @mem_read: %lx -> %lx\n", PAGE_ALIGN(to), size + PAGE_OFFT(to));
-        return -1;
-    }
-
-    if (!(prot & PROT_WRITE)) {
-        if (-1 == mprotect((void*)PAGE_ALIGN(to), PAGE_SZ, PROT_WRITE)) {
-            fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN(to));
-            return -1;
-        }
-    }
-
-    memcpy((void*)to, (void*)from, PAGE_SZ - PAGE_OFFT(to) <= size ? PAGE_SZ - PAGE_OFFT(to) : size);
-
-    if (-1 == mprotect((void*)PAGE_ALIGN(to), PAGE_SZ, prot)) {
-        fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN(to));
-        return -1;
-    }
-
-    k = PAGE_SZ - PAGE_OFFT(to);
-
-    while (k < size && k) {
-        // printf("> write %lx, size: %lx\n", k, size);
+    while (true) {
         prot = get_prot(s_binary, to + k);
+        _sz = (PAGE_SZ - PAGE_OFFT((to + k)) < size - k ? PAGE_SZ - PAGE_OFFT((to + k)) : size - k);
 
-        if (prot == -1) {
-            fprintf(stderr, "> @get_prot > @mem_read: %lx\n", PAGE_ALIGN((to + k)));
+        if (-1 == prot) {
+            fprintf(stderr, "> @get_prot > @mem_read: %lx -> %lx\n", PAGE_ALIGN((to + k)), size + PAGE_OFFT((to + k)));
             return -1;
         }
 
@@ -273,15 +211,22 @@ int mem_write(mdata_binary_t* s_binary, uint64_t to, void* from, size_t size)
             }
         }
 
-        memcpy((void*)to + k, (void*)from + k, PAGE_SZ - PAGE_OFFT((to + k)) <= size - k ? PAGE_SZ - PAGE_OFFT((to + k)) : size - k);
+        memmove((void* )(to + k), (void*)(from + k), _sz);
 
         if (-1 == mprotect((void*)PAGE_ALIGN((to + k)), PAGE_SZ, prot)) {
             fprintf(stderr, "> @mprotect > @mem_read: %lx\n", PAGE_ALIGN((to + k)));
             return -1;
         }
 
-        k += k + PAGE_SZ > size ? size - k : PAGE_SZ;
+        if (k == size) {
+            break;
+        }
+
+        k += _sz;
     }
+
+    assert (k == size);
+    for (size_t i = 0; i < size; i++) assert (*((uint8_t* )(to + i)) == *((uint8_t* )(from + i)));
 
     return size;
 }

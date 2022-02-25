@@ -97,7 +97,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     }
 
     /* overloapping instruction */
-    if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= 0x1000) {
+    if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= PAGE_SZ) {
         /* We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes */
         if (!is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
             size = PAGE_SZ - PAGE_OFFT(addr);
@@ -168,8 +168,8 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
 	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
     char buf_insn[INSTRUCTION_MAX_SZ] = {0};
 
-    if (!is_mapped(target, s_binary)) {
-        fprintf(stderr, "> @ins_len > @is_mapped: %lx isn't mapped\n", target);
+    if (!is_mapped_range(s_binary, target, INSTRUCTION_MAX_SZ)) {
+        fprintf(stderr, "> @ins_len > @is_mapped_range: %lx isn't mapped\n", target);
         fatal_dump(s_binary);
     } else if (-1 == mem_read(s_binary, buf_insn, target, INSTRUCTION_MAX_SZ)) {
         fprintf(stderr, "> @ins_len > @mem_read: from: %lx, size: %x\n", target, INSTRUCTION_MAX_SZ);
@@ -311,28 +311,6 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     // we emulate the call instruction
                     s_binary->dbi_handler->state->rsp -= 8;
 
-                    // if (!is_mapped(s_binary->dbi_handler->state->rsp, s_binary)) {
-                    //     assert(!PAGE_OFFT(s_binary->dbi_handler->base_guest_stack));
-
-                    //     int gap = s_binary->dbi_handler->base_guest_stack - PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
-
-                    //     if (gap < 0) {
-                    //         printf("wtf ?? gap: %d, base_guest: %lx, rsp: %lx\n", gap, s_binary->dbi_handler->base_guest_stack, s_binary->dbi_handler->state->rsp);
-                    //         fatal_dump(s_binary);
-                    //     }
-
-                    //     // if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(s_binary->dbi_handler->state->rsp), (uint64_t)gap)) {
-                    //     //     fprintf(stderr, "> @__eval_target > @is_mapped(rsp): failed to add stack pages\n");
-                    //     //     fatal_dump(s_binary);
-                    //     // }
-
-                    //     s_binary->dbi_handler->base_guest_stack = PAGE_ALIGN(s_binary->dbi_handler->state->rsp);
-
-                    //     fprintf(s_binary->debug_stream, ">.< rsp [ %lx ] sama is not mapped anymore\n", s_binary->dbi_handler->state->rsp);
-                    //     // return -1;
-                    // }
-
-                    // parse_maps(s_binary);
                     *(uint64_t* )s_binary->dbi_handler->state->rsp = s_binary->dbi_handler->state->rip + insn->size;
                     achieve = true;
                 }
@@ -397,6 +375,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
 
                 if (set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
                     fprintf(stderr, "FATAL arch_prctl\n");
+                    fatal_dump(s_binary);
                 }
 
                 if (ret) {

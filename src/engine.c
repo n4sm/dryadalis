@@ -24,7 +24,7 @@
 
 #include "../include/dryadalis_x86.h"
 
-int insn_count;
+int bbl_count;
 
 /*  Dieu le Roy */
 
@@ -48,7 +48,7 @@ int arch_prctl(int func, void *ptr)
 
 void default_dtor(void) 
 {
-    fprintf(stdout, "End of the program ! bbl count: %x\n", insn_count);
+    fprintf(stdout, "End of the program ! bbl count: %x\n", bbl_count);
     syscall(__NR_exit, 0);
 }
 
@@ -549,7 +549,7 @@ int log_persistent_hook(mdata_binary_t* s_binary, uint64_t address)
 
     return 0;
 }
-
+/*
 int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hook) 
 {
     off_t offt_cflow = opcodes_cflow(*s_binary->dbi_handler->curr_hook, s_binary, true);
@@ -595,6 +595,7 @@ int instrument_persistent(mdata_binary_t* s_binary, persistent_t* persistent_hoo
 
     return 0;
 }
+*/
 
 /* 
     instrument_request - It writes the dump hook and sets the right mode (INSTRUMENT_ADDR / INSTRUMENT_BBL)
@@ -671,6 +672,7 @@ int instrument(mdata_binary_t* s_binary)
     s_binary->dbi_handler->host_rsp = (uint64_t* )((map_stack()));
     s_binary->dispatcher = (uint64_t)_dispatcher;
     s_binary->dbi_handler->u_handler = s_binary->dbi_handler->request->callback;
+    s_binary->dbi_handler->take_callback = true;
 
     if (-1 == craft_hook(s_binary) || -1 == craft_restore_stub(s_binary)) {
         fatal_dump(s_binary);
@@ -745,7 +747,7 @@ int write_hook(mdata_binary_t* s_binary, hook_t* hook, int opt)
     return 0;
 }
 
-/* _instrument_bbl - internal part, returns the offset right after the cflow instruction, updates automatically hook->jmp
+/* _instrument_bbl - returns the offset right after the cflow instruction, updates automatically hook->jmp
 
     @s_binary: object descriptor
     @hook: hook descriptor
@@ -780,14 +782,6 @@ int restore_bytes(hook_t* hook, mdata_binary_t* s_binary)
         fprintf(stderr, "> @restore_bytes, failed to write @ %lx\n", hook->jmp);
         fatal_dump(s_binary);
     }
-
-    // if (hook->prot_restore) {
-    //     mem_map_t* _mem_desc = NULL;
-    //     if (-1 == (long)(_mem_desc = get_mem_desc(s_binary, hook->jmp))
-    //         || -1 == restore_vprot(s_binary, hook->length, _mem_desc, PAGE_OFFT(hook->jmp))) {
-    //         fatal_dump(s_binary);
-    //     }
-    // }
 
     return 0;
 }
@@ -864,9 +858,9 @@ void _dispatcher(mdata_binary_t* s_binary)
 
     if (s_binary->dbi_handler->restore->jmp) {
         if (-1 == restore_bytes(s_binary->dbi_handler->restore, s_binary) \
-            || (s_binary->dbi_handler->restore->to_unmap 
-                                                         && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
-            
+            || (s_binary->dbi_handler->restore->to_unmap \
+            && (-1 == unmap(s_binary->dbi_handler->restore->to_unmap, PAGE_SZ)))) {
+
             fprintf(stderr, "> _dispatcher > @restore_bytes or @unmap failed\n");
             fatal_dump(s_binary);
         }
@@ -878,7 +872,7 @@ void _dispatcher(mdata_binary_t* s_binary)
     }
 
     if (-1 == restore_bytes(s_binary->dbi_handler->dump, s_binary) \
-        || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(s_binary->dbi_handler->dump->to_unmap, PAGE_SZ)))) {
+        || (s_binary->dbi_handler->dump->to_unmap && (-1 == unmap(PAGE_ALIGN(s_binary->dbi_handler->dump->to_unmap), PAGE_SZ)))) {
         fprintf(stderr, "FATAL restore_bytes # dump\n");
         fatal_dump(s_binary);
     }

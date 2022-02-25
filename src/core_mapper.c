@@ -105,7 +105,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
         return -1;
     }
 
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
 
     return 0;
 }
@@ -230,7 +230,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
 
     add_auxvt(AT_NULL, &stack[idx], 0x0);
 
-    parse_maps(s_binary);
+    // parse_maps(s_binary);
 
     return stack;
 }
