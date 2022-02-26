@@ -91,6 +91,9 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     size_t size = PAGE_SZ;
     int n = 0;
 
+    // cs_free(s_binary->dbi_handler->cps_utils->insn, 1);
+    // s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
+
     if (!is_mapped(addr, s_binary)) {
         fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
         return -1;
@@ -111,8 +114,13 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
 		fatal_dump(s_binary);
     }
 
+    // for (int i = 0; i < size; i++) printf("%x", insn_buffer[i]);
+    // printf("\n");
+    // printf("cs_disasm_iter(%lx, %p, %lx, &(%lx), %p)\n", s_binary->dbi_handler->cps_utils->handle, &insn_buf, size, addr, s_binary->dbi_handler->cps_utils->insn);
+
     while(cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
-        if (DEBUG) {
+        s_binary->dbi_handler->cps_utils->count++;
+        if (DEBUG & LOG_INSN) {
             fprintf(s_binary->debug_stream, 
                     "0x%lx\t%s %s\n", 
                     s_binary->dbi_handler->cps_utils->insn->address, 
@@ -123,33 +131,21 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
 
         for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
             if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i])) {
-                if (beg) {
-                    printf("beg = true\n");
-                    fprintf(s_binary->debug_stream, 
-                        "0x%lx\t%s %s\n", 
-                        s_binary->dbi_handler->cps_utils->insn->address, 
-                        s_binary->dbi_handler->cps_utils->insn->mnemonic, 
-                        s_binary->dbi_handler->cps_utils->insn->op_str
-                    );
-                    break;
-                }
-
                 return n;
             }
         }
 
         n += s_binary->dbi_handler->cps_utils->insn->size;
         beg = false;
-        s_binary->dbi_handler->cps_utils->count++;
     }
 
     if (is_mapped((saved_addr + n), s_binary) && n) {
         // if the page next to the current page is mapped we call opcode_cflow onto it
-        if (DEBUG) {
+        if (DEBUG & LOG_INSN) {
             fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, saved_addr + n);
         }
 
-        return opcodes_cflow(saved_addr + n, s_binary, true);
+        return n + opcodes_cflow(saved_addr + n, s_binary, true);
     }
 
     fprintf(stderr, "FATAL found nothing\n");
@@ -179,13 +175,12 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
     }
 
     if (cs_disasm(handle, buf, _sz, target, 1, &insn_d)) {
-        // s_binary->dbi_handler->cps_utils->count++;
-
         cs_free(insn_d, 1);
         return insn_d->size;
     }
 
     fprintf(stderr, "> @ins_len > @cs_disasm_iter: failed to disassemble at %lx\n", target);
+    cs_free(insn_d, 1);
     return -1;
 }
 
@@ -196,6 +191,8 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
 */
 _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) 
 {
+    uint64_t eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
+
     switch (id) {
         case X86_INS_JE:
             return is_set(s_binary, ZF);
@@ -220,14 +217,16 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary)
             return !read_reg(X86_REG_RCX, s_binary->dbi_handler->hashmap);
 
         case X86_INS_JG:
-            return !is_set(s_binary, ZF) && !is_set(s_binary, SF);
+            return !is_set(s_binary, ZF) && (is_set(s_binary, SF) == is_set(s_binary, OF));
         case X86_INS_JGE:
-            return  ((!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) == (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF)));
+            return (is_set(s_binary, SF) == is_set(s_binary, OF));
 
         case X86_INS_JL:
-            return (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
+            // if (DEBUG) fprintf(s_binary->debug_stream, "\teflags & SF != elfags & OF <=> %lx & %x != %lx & %x\n", eflags, SF, elfags, OF);
+            return (is_set(s_binary, SF) != is_set(s_binary, OF));
         case X86_INS_JLE:
-            return is_set(s_binary, ZF) || (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & SF)) != (!(read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & OF));
+            // if (DEBUG) fprintf(s_binary->debug_stream, "\teflags & %d || eflags & %d != elfags & %d\n", ZF, SF, OF);
+            return is_set(s_binary, ZF) || is_set(s_binary, SF) != is_set(s_binary, OF);
 
         case X86_INS_JO:
             return is_set(s_binary, OF);
@@ -269,7 +268,7 @@ _Bool is_test(uint64_t cs_eflags)
 */
 _Bool is_set(mdata_binary_t* s_binary, int flag) 
 {
-    if (DEBUG) {
+    if (DEBUG & LOG_JMP) {
         fprintf(s_binary->debug_stream, "eflags & flag: %lx & %x = %lx\n", read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap), flag, (read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap) & flag));
     }
 
@@ -310,7 +309,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
             if (is_call(details->groups[i]) || is_jmp_taken(insn->id, s_binary)) {
                 cs_x86_op* operand = &(x86->operands[0]);
 
-                if (DEBUG) {
+                if (DEBUG & LOG_JMP) {
                     fprintf(s_binary->debug_stream, " taken ");
                 }
 
@@ -342,7 +341,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                                 base += insn->size;
                             }
 
-                            if (DEBUG) {
+                            if (DEBUG & LOG_JMP) {
                                 fprintf(s_binary->debug_stream, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
                             }
 
@@ -358,7 +357,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                 }
             } else {
                 // jmp not taken
-                if (DEBUG) {
+                if (DEBUG & LOG_JMP) {
                     fprintf(s_binary->debug_stream, " not taken ");
                 }
 

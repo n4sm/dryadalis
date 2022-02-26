@@ -794,7 +794,7 @@ uint64_t br_emulation(mdata_binary_t* s_binary, uint64_t addr)
         fatal_dump(s_binary);
     }
 
-    if (DEBUG) {
+    if (DEBUG & LOG_JMP) {
         fprintf(s_binary->debug_stream, "cflow target: 0x%lx\n", target);
     }
 
@@ -867,7 +867,7 @@ void _dispatcher(mdata_binary_t* s_binary)
     }
     s_binary->dbi_handler->restore->to_unmap = 0x0;
 
-    if (DEBUG) {
+    if (DEBUG & LOG_INSN) {
         fprintf(s_binary->debug_stream, ".\n");
     }
 

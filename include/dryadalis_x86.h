@@ -37,7 +37,7 @@
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0X50000
-#define DEBUG true
+#define DEBUG false
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1
@@ -72,6 +72,10 @@
 #define NT (1 << 14)
 #define RF (1 << 16)
 #define AC (1 << 18)
+
+#define LOG_SYSCALL 0x1
+#define LOG_INSN 0x10
+#define LOG_JMP 0x100
 
 // structures
 typedef struct args_syscall_s {
