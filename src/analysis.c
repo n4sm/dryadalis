@@ -104,19 +104,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         } else {
             size = PAGE_SZ;
         }
-
     }
-
-/*
-    if (!is_mapped_range(s_binary, addr, size) && is_mapped_range(s_binary, addr, size - PAGE_OFFT(addr) - 1)) {
-        size -= PAGE_OFFT(addr);
-    }
-
-    if (!is_mapped_range(s_binary, addr, size)) {
-        fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
-        return -1;
-    }
-*/
 
     if (-1 == mem_read(s_binary, insn_buffer, addr, size)) {
         fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
@@ -130,12 +118,22 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
                     s_binary->dbi_handler->cps_utils->insn->address, 
                     s_binary->dbi_handler->cps_utils->insn->mnemonic, 
                     s_binary->dbi_handler->cps_utils->insn->op_str
-                    );
+                );
         }
 
         for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
-            if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i]) 
-                         && (!beg || s_binary->dbi_handler->cps_utils->insn->detail->groups[i] != X86_GRP_INT)) {
+            if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i])) {
+                if (beg) {
+                    printf("beg = true\n");
+                    fprintf(s_binary->debug_stream, 
+                        "0x%lx\t%s %s\n", 
+                        s_binary->dbi_handler->cps_utils->insn->address, 
+                        s_binary->dbi_handler->cps_utils->insn->mnemonic, 
+                        s_binary->dbi_handler->cps_utils->insn->op_str
+                    );
+                    break;
+                }
+
                 return n;
             }
         }
@@ -145,7 +143,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         s_binary->dbi_handler->cps_utils->count++;
     }
 
-    if (is_mapped((saved_addr + n), s_binary) && addr != saved_addr) {
+    if (is_mapped((saved_addr + n), s_binary) && n) {
         // if the page next to the current page is mapped we call opcode_cflow onto it
         if (DEBUG) {
             fprintf(s_binary->debug_stream, "recurr call, size: %lx, addr: %lx\n", size, saved_addr + n);
@@ -166,7 +164,11 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
 {
     csh handle = s_binary->dbi_handler->cps_utils->handle;
 	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
-    char buf_insn[INSTRUCTION_MAX_SZ] = {0};
+    size_t _sz = INSTRUCTION_MAX_SZ;
+    uint8_t buf_insn[INSTRUCTION_MAX_SZ] = {0};
+    uint8_t* buf = buf_insn;
+
+    cs_insn* insn_d = cs_malloc(handle);
 
     if (!is_mapped_range(s_binary, target, INSTRUCTION_MAX_SZ)) {
         fprintf(stderr, "> @ins_len > @is_mapped_range: %lx isn't mapped\n", target);
@@ -176,10 +178,15 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
         fatal_dump(s_binary);
     }
 
-    s_binary->dbi_handler->cps_utils->count += cs_disasm(handle, (const uint8_t *)buf_insn, 15, 0, 0, &insn);
-    off_t ret = insn[0].size;
+    if (cs_disasm(handle, buf, _sz, target, 1, &insn_d)) {
+        // s_binary->dbi_handler->cps_utils->count++;
 
-    return ret;
+        cs_free(insn_d, 1);
+        return insn_d->size;
+    }
+
+    fprintf(stderr, "> @ins_len > @cs_disasm_iter: failed to disassemble at %lx\n", target);
+    return -1;
 }
 
 /*
@@ -386,7 +393,8 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                 return (uint64_t)(instruction + sz);
             }
 
-            return (uint64_t)instruction;
+            // printf("syscall %lx not handled\n", s_binary->dbi_handler->state->rax);
+            exit(EXIT_FAILURE);
         }
     }
 

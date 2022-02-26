@@ -37,7 +37,7 @@
 #define INSTRUMENTED_GS 0x15f000
 
 #define STACK_SZ 0X50000
-#define DEBUG false
+#define DEBUG true
 
 #define INSTRUMENT_BBL 0x0
 #define INSTRUMENT_ADDR 0x1

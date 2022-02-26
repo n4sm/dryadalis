@@ -225,7 +225,8 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     add_auxvt(AT_UID, &stack[idx], 1000);
     add_auxvt(AT_PAGESZ, &stack[idx], 0x1000);
     add_auxvt(AT_EXECFN, &stack[idx], (uint64_t)(argv[1]));
-    add_auxvt(AT_SYSINFO_EHDR, &stack[idx], auxvt(&iter[idx], AT_SYSINFO_EHDR));
+    // add_auxvt(AT_SYSINFO_EHDR, &stack[idx], AT_IGNORE);
+    // You know why ..
     add_auxvt(AT_SECURE, &stack[idx], 0x0);
 
     add_auxvt(AT_NULL, &stack[idx], 0x0);
