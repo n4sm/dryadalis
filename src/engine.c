@@ -46,7 +46,7 @@ int arch_prctl(int func, void *ptr)
     return syscall(__NR_arch_prctl, func, ptr);
 }
 
-void default_dtor(void) 
+void default_dtor(void)
 {
     fprintf(stdout, "End of the program ! bbl count: %x\n", bbl_count);
     syscall(__NR_exit, 0);

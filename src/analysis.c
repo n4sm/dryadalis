@@ -75,6 +75,10 @@ _Bool is_interrupt(int group) {
     return (group == X86_GRP_INT) || (group == X86_GRP_PRIVILEGE) || (group == X86_GRP_IRET);
 }
 
+_Bool is_syscall(int group) {
+    return (group == X86_GRP_INT);
+}
+
 /*
     opcodes_cflow - returns how many bytes there are up to the next control flow instruction
     @addr: address from which the analysis began
@@ -91,9 +95,6 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     size_t size = PAGE_SZ;
     int n = 0;
 
-    // cs_free(s_binary->dbi_handler->cps_utils->insn, 1);
-    // s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
-
     if (!is_mapped(addr, s_binary)) {
         fprintf(stderr, "> @opcodes_cflow > @is_mapped: 0x%lx is not mapped\n", addr);
         return -1;
@@ -109,16 +110,14 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         }
     }
 
+    assert(size);
+
     if (-1 == mem_read(s_binary, insn_buffer, addr, size)) {
         fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
 		fatal_dump(s_binary);
     }
 
-    // for (int i = 0; i < size; i++) printf("%x", insn_buffer[i]);
-    // printf("\n");
-    // printf("cs_disasm_iter(%lx, %p, %lx, &(%lx), %p)\n", s_binary->dbi_handler->cps_utils->handle, &insn_buf, size, addr, s_binary->dbi_handler->cps_utils->insn);
-
-    while(cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
+    while(n < PAGE_SZ && cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
         s_binary->dbi_handler->cps_utils->count++;
         if (DEBUG & LOG_INSN) {
             fprintf(s_binary->debug_stream, 
@@ -159,10 +158,10 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
 off_t insn_len(uint64_t target, mdata_binary_t* s_binary) 
 {
     csh handle = s_binary->dbi_handler->cps_utils->handle;
-	cs_insn *insn = s_binary->dbi_handler->cps_utils->insn;
     size_t _sz = INSTRUCTION_MAX_SZ;
     uint8_t buf_insn[INSTRUCTION_MAX_SZ] = {0};
     uint8_t* buf = buf_insn;
+    uint32_t sz_ret = 0;
 
     cs_insn* insn_d = cs_malloc(handle);
 
@@ -175,8 +174,9 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
     }
 
     if (cs_disasm(handle, buf, _sz, target, 1, &insn_d)) {
+        sz_ret = insn_d->size;
         cs_free(insn_d, 1);
-        return insn_d->size;
+        return sz_ret;
     }
 
     fprintf(stderr, "> @ins_len > @cs_disasm_iter: failed to disassemble at %lx\n", target);
@@ -191,8 +191,6 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
 */
 _Bool is_jmp_taken(int id, mdata_binary_t* s_binary) 
 {
-    uint64_t eflags = read_reg(X86_REG_EFLAGS, s_binary->dbi_handler->hashmap);
-
     switch (id) {
         case X86_INS_JE:
             return is_set(s_binary, ZF);
@@ -366,7 +364,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
         } else if (is_ret(details->groups[i])) {
             s_binary->dbi_handler->state->rsp += 8;
             return *((uint64_t* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
-        } else if (is_interrupt(details->groups[i])) {
+        } else if (is_syscall(details->groups[i])) {
             hook_syscall sys_callback = NULL;
             uint64_t ret = 0x0;
             size_t sz = insn->size;

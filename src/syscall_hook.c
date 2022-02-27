@@ -607,7 +607,7 @@ uint64_t hook_lgetxattr(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    do_syscall(__NR_statx, state->rdi, state->rsi, state->rdx, state->r10);
+    do_syscall(__NR_lgetxattr, state->rdi, state->rsi, state->rdx, state->r10);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lgetxattr (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
@@ -659,6 +659,256 @@ uint64_t hook_lseek(mdata_binary_t* s_binary)
 
     do_syscall(__NR_lseek, state->rdi, state->rsi, state->rdx);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lseek (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_gettimeofday(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_gettimeofday, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] gettimeofday (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_clone(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_clone, state->rdi, state->rsi, state->rdx, state->r10);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] clone (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_wait4(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_wait4, state->rdi, state->rsi, state->rdx, state->r10);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] clone (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_lstat(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_lstat, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lstat (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_fanotify_mark(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_fanotify_mark, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] fanotify_mark (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_msgsnd(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_msgsnd, state->rdi, state->rsi, state->rdx, state->r10);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] msgsnd (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_seccomp(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_seccomp, state->rdi, state->rsi, state->rdx);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] seccomp (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_io_submit(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_io_submit, state->rdi, state->rsi, state->rdx);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] io_submit (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_time(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_time, state->rdi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] time (%lx) = %ld\n", state->rdi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_clock_getres(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_clock_getres, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] clock_getres (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_clock_gettime(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_clock_gettime, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] clock_gettime (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_epoll_create1(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_epoll_create1, state->rdi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] epoll_create1 (%lx) = %ld\n", state->rdi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_eventfd2(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_eventfd2, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] eventfd2 (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_pipe2(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_pipe2, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] pipe2 (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_getcwd(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_getcwd, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] getcwd (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_chdir(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_chdir, state->rdi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] chdir (%lx) = %ld\n", state->rdi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_umask(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_umask, state->rdi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] umask (%lx) = %ld\n", state->rdi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_mkdir(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_mkdir, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] mkdir (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_bind(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_bind, state->rdi, state->rsi, state->rdx);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] bind (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_listen(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_listen, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] listen (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_setsockopt(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_setsockopt, state->rdi, state->rsi, state->rdx, state->r10, state->r8);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] setsockopt (%lx, %lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_accept4(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_accept4, state->rdi, state->rsi, state->rdx, state->r10);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] accept4 (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_poll(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_poll, state->rdi, state->rsi, state->rdx);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] poll (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_shmat(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_shmat, state->rdi, state->rsi, state->rdx);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] shmat (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
+    return 0;
+}
+
+uint64_t hook_shutdown(mdata_binary_t* s_binary)
+{
+    state_rtime_t* state = s_binary->dbi_handler->state;
+
+    do_syscall(__NR_shutdown, state->rdi, state->rsi);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] shutdown (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
 
     return 0;
 }
@@ -818,9 +1068,84 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary)
         case __NR_lseek:
             return hook_lseek;
 
+        case __NR_gettimeofday:
+            return hook_gettimeofday;
+
+        case __NR_clone:
+            return hook_clone;
+
+        case __NR_wait4:
+            return hook_wait4;
+
+        case __NR_lstat:
+            return hook_lstat;
+
+        case __NR_fanotify_mark:
+            return hook_fanotify_mark;
+
+        case __NR_msgsnd:
+            return hook_msgsnd;
+
+        case __NR_seccomp:
+            return hook_seccomp;
+
+        case __NR_io_submit:
+            return hook_io_submit;
+
+        case __NR_time:
+            return hook_time;
+
+        case __NR_clock_getres:
+            return hook_clock_getres;
+
+        case __NR_clock_gettime:
+            return hook_clock_gettime;
+
+        case __NR_epoll_create1:
+            return hook_epoll_create1;
+
+        case __NR_eventfd2:
+            return hook_eventfd2;
+
+        case __NR_pipe2:
+            return hook_pipe2;
+
+        case __NR_getcwd:
+            return hook_getcwd;
+
+        case __NR_chdir:
+            return hook_chdir;
+
+        case __NR_umask:
+            return hook_umask;
+
+        case __NR_mkdir:
+            return hook_mkdir;
+
+        case __NR_bind:
+            return hook_bind;
+
+        case __NR_listen:
+            return hook_listen;
+
+        case __NR_setsockopt:
+            return hook_setsockopt;
+
+        case __NR_accept4:
+            return hook_accept4;
+
+        case __NR_poll:
+            return hook_poll;
+
+        case __NR_shmat:
+            return hook_shmat;
+
+        case __NR_shutdown:
+            return hook_shutdown;
+
     default:
         fflush(stderr);
-        if (DEBUG & LOG_SYSCALL) fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
+        fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
         return (hook_syscall )-1;
     }
 }
