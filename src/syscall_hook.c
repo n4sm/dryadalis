@@ -14,6 +14,7 @@
 #include <asm/ldt.h>   
 #include <asm/prctl.h>
 #include <sys/prctl.h>
+#include <assert.h>
 
 #include <capstone/capstone.h>
 #include <capstone/x86.h>
@@ -46,25 +47,39 @@ _Bool must_change;
         fatal_dump(s_binary); \
     } \
 
+extern int errno;
+
 /* 
     hook_brk - nothing to do except if it allocates a page, if this is the case we allocate one more page in the virtual memory map
 */
 uint64_t hook_brk(mdata_binary_t* s_binary) 
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
-    uint64_t _brk_base = syscall(__NR_brk, 0x0);
+    uint64_t _brk_base = (uint64_t)s_binary->dbi_handler->vbrk;
+    // printf("base: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
 
-    do_syscall(__NR_brk, state->rdi);
+    if (!state->rdi) {
+        state->rax = _brk_base;
+    } else {
+        assert(state->rdi > _brk_base);
+        uint32_t _brk_size = state->rdi - _brk_base;
+
+        if (_brk_size + PAGE_OFFT(_brk_base) > PAGE_SZ) {
+            if (MAP_FAILED == mmap((void* )PAGE_ALIGN(_brk_base), PAGE_ROUND(_brk_size) + 1, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0)) {
+                fprintf(stderr, "> @hook_brk > @mmap(%lx, %x)\n", _brk_base, PAGE_ROUND(_brk_size) + 1);
+
+                fprintf(stderr, "Error mmap: %s\n", strerror( errno ));
+                fatal_dump(s_binary);
+            } else {
+                _brk_base = state->rdi;
+            }
+        }
+
+        state->rax = _brk_base;
+        s_binary->dbi_handler->vbrk = (uint8_t* )_brk_base;
+    }
+
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] brk (%lx) = %lx\n", state->rdi, state->rax);
-
-    // if (PAGE_ALIGN(_brk_base) != PAGE_ALIGN(state->rax)) {
-    //     if (-1 == list_add_map(s_binary, PROT_READ | PROT_WRITE, PAGE_ALIGN(_brk_base) + PAGE_SZ, PAGE_ROUND(((state->rax - _brk_base +1)))+1)) {
-    //         fprintf(stderr, "> @hook_brk > @list_add_map: prot: %x, size: %lx, addr: %lx\n", PROT_READ | PROT_WRITE, PAGE_ALIGN(state->rax), PAGE_ROUND(((state->rax - _brk_base) + 1)));
-    //         fatal_dump(s_binary);
-    //     }
-    // }
-
-    // parse_maps(s_binary);
 
     return 0;
 }

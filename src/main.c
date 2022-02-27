@@ -23,6 +23,10 @@ int test(void* s_binary)
 
 int main(int argc, char **argv) 
 {
+    if (argc < 2) {
+        return -1;
+    }
+
     mdata_binary_t *s_binary = NULL;
     arg_t arguments = {.argc = argc, .argv = argv};
     request_t req = {.callback = test, .address = 0x0, .type = INSTRUMENT_BBL};

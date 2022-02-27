@@ -38,11 +38,11 @@
 
 #define STACK_SZ 0X50000
 
-
 #define LOG_SYSCALL 0x1
 #define LOG_INSN 0x10
 #define LOG_JMP 0x100
-#define LOG_FULL (LOG_SYSCALL | LOG_INSN | LOG_JMP)
+#define LOG_MAP 0x1000
+#define LOG_FULL (LOG_SYSCALL | LOG_INSN | LOG_JMP | LOG_MAP)
 #define LOG_NONE 0x0
 
 #define DEBUG LOG_NONE
@@ -272,6 +272,7 @@ typedef struct dbi_instr_s {
     request_t* request;
     persistent_t* persistent_hook;
     capstone_hanlder_t* cps_utils;
+    uint8_t* vbrk;
     int fd_umaps;
 } dbi_instr_t;
 

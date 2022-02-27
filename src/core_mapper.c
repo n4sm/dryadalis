@@ -71,11 +71,11 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
         //         sz + 1); // fff + 1
     }
 
-    fprintf(s_binary->debug_stream, 
-            "[>] %lx - %lx %lx\n", 
-            (uint64_t)(curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base), 
-            (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz), 
-            sz + 1); // fff + 1
+    if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, 
+                                "[>] %lx - %lx %lx\n", 
+                                (uint64_t)(curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base), 
+                                (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz), 
+                                sz + 1); // fff + 1
 
     if (s_ph->p_memsz > s_ph->p_filesz && curr_map) {
         uint64_t map_filesz = curr_map + s_ph->p_filesz;
@@ -88,24 +88,39 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
                map_end - map_filesz);
 
         if (bss_end > map_end) {
-            if (MAP_FAILED == mmap((void *)map_end+1, PAGE_ROUND((bss_end - map_end)), PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
+            if (MAP_FAILED == mmap((void *)map_end+1, PAGE_ROUND((bss_end - map_end)) + 1, PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
                 return -1;
             }
-            
-            fprintf(s_binary->debug_stream, "[>] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end))+1);
-            // list_add_map(s_binary,
-            //         PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags),
-            //         map_end+1,
-            //         PAGE_ROUND((bss_end - map_end))+1);
+
+            if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, "[>] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end))+1);
+
+            s_binary->dbi_handler->vbrk = (uint8_t* )((map_end + 1 + PAGE_ROUND((bss_end - map_end))) + 1);
+            if (DEBUG & LOG_MAP) {
+                fprintf(s_binary->debug_stream, "[>] s_binary->dbi_handler->vbrk: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
+            }
+        } else {
+            if (s_ph->p_flags & PF_W) {
+                s_binary->dbi_handler->vbrk = (uint8_t* )((uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz) + 1);
+                if (DEBUG & LOG_MAP) {
+                    fprintf(s_binary->debug_stream, "[>] s_binary->dbi_handler->vbrk: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
+                }
+            }
+        }
+    } else {
+        if (s_ph->p_flags & PF_W) {
+            s_binary->dbi_handler->vbrk = (uint8_t* )((uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz) + 1);
+            if (DEBUG & LOG_MAP) {
+                fprintf(s_binary->debug_stream, "[>] s_binary->dbi_handler->vbrk: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
+            }
         }
     }
+
+
 
     // set the right permissions
     if (mprotect(curr_map ? (void *)PAGE_ALIGN(curr_map) : (void* )s_binary->base, PAGE_ROUND(s_ph->p_memsz), PROT_READ | _PROT_EXEC(s_ph->p_flags) | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags))) {
         return -1;
     }
-
-    // parse_maps(s_binary);
 
     return 0;
 }
@@ -114,7 +129,7 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
 mdata_binary_t* map_binary(const char *filename, arg_t* arguments) 
 {
     mdata_binary_t *s_binary = NULL;
-    printf("[+] Loading %s\n", filename);
+    if (DEBUG & LOG_MAP) printf("[+] Loading %s\n", filename);
 
     if (-1 == (long)(s_binary = init_analysis(filename))) {
         fprintf(stderr, "Error init_analysis\n");
@@ -145,8 +160,7 @@ mdata_binary_t* map_binary(const char *filename, arg_t* arguments)
                                                         (uint64_t)(s_binary->interp->pie ? (uint64_t)(s_binary->interp->base + s_binary->interp->eh->e_entry) : (uint64_t)s_binary->interp->eh->e_entry) 
                                                        : (uint64_t)(s_binary->pie ? (uint64_t)(s_binary->base + s_binary->eh->e_entry) : (uint64_t)s_binary->eh->e_entry));
 
-    fprintf(s_binary->debug_stream, "[+] %s mapped\n", s_binary->filename);
-    // merge_address_space(s_binary);
+    if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, "[+] %s mapped\n", s_binary->filename);
     return s_binary;
 }
 
@@ -424,7 +438,7 @@ _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary)
 // merge the address space of the target binary and its linker.
 mem_map_t* merge_address_space(mdata_binary_t* s_binary) 
 {
-    mem_map_t* iter = NULL;
+    // mem_map_t* iter = NULL;
 
     if (s_binary->interp) {
 		struct list_head* prev_binary = s_binary->memory_map->list.prev;

@@ -396,7 +396,8 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
     }
 
     // if that's not a return, a call or a jmp it can be an interrupt and we handle that by a diffrent way so we ignore it for now
-    return (uint64_t)(instruction);
+    printf("unhandled instruction %lx\n", instruction);
+    exit(EXIT_FAILURE);
 }
 
 /*

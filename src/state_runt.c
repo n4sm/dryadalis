@@ -331,24 +331,24 @@ void log_avx2(state_rtime_t* state, FILE* stream)
 
 void log_general(state_rtime_t* state, FILE* stream)
 {
-    fprintf(stream, "$rax\t {%lx}\n", state->rax);
-    fprintf(stream, "$rbx\t {%lx}\n", state->rbx);
-    fprintf(stream, "$rcx\t {%lx}\n", state->rcx);
-    fprintf(stream, "$rdx\t {%lx}\n", state->rdx);
-    fprintf(stream, "$rsi\t {%lx}\n", state->rsi);
-    fprintf(stream, "$rdi\t {%lx}\n", state->rdi);
-    fprintf(stream, "$rbp\t {%lx}\n", state->rbp);
-    fprintf(stream, "$rsp\t {%lx}\n", state->rsp);
-    fprintf(stream, "$rip\t {%lx}\n", state->rip);
-    fprintf(stream, "$r8 \t {%lx}\n", state->r8);
-    fprintf(stream, "$r9 \t {%lx}\n", state->r9);
-    fprintf(stream, "$r10\t {%lx}\n", state->r10);
-    fprintf(stream, "$r11\t {%lx}\n", state->r11);
-    fprintf(stream, "$r12\t {%lx}\n", state->r12);
-    fprintf(stream, "$r13\t {%lx}\n", state->r13);
-    fprintf(stream, "$r14\t {%lx}\n", state->r14);
-    fprintf(stream, "$r15\t {%lx}\n", state->r15);
-    fprintf(stream, "$rflags\t {%lx}\n", state->rflags);
+    fprintf(stream, "$rax\t {%016lx}\n", state->rax);
+    fprintf(stream, "$rbx\t {%016lx}\n", state->rbx);
+    fprintf(stream, "$rcx\t {%016lx}\n", state->rcx);
+    fprintf(stream, "$rdx\t {%016lx}\n", state->rdx);
+    fprintf(stream, "$rsi\t {%016lx}\n", state->rsi);
+    fprintf(stream, "$rdi\t {%016lx}\n", state->rdi);
+    fprintf(stream, "$rbp\t {%016lx}\n", state->rbp);
+    fprintf(stream, "$rsp\t {%016lx}\n", state->rsp);
+    fprintf(stream, "$rip\t {%016lx}\n", state->rip);
+    fprintf(stream, "$r8 \t {%016lx}\n", state->r8);
+    fprintf(stream, "$r9 \t {%016lx}\n", state->r9);
+    fprintf(stream, "$r10\t {%016lx}\n", state->r10);
+    fprintf(stream, "$r11\t {%016lx}\n", state->r11);
+    fprintf(stream, "$r12\t {%016lx}\n", state->r12);
+    fprintf(stream, "$r13\t {%016lx}\n", state->r13);
+    fprintf(stream, "$r14\t {%016lx}\n", state->r14);
+    fprintf(stream, "$r15\t {%016lx}\n", state->r15);
+    fprintf(stream, "$rflags\t {%016lx}\n", state->rflags);
 }
 
 void log_regs(mdata_binary_t* s_binary, FILE* stream) 

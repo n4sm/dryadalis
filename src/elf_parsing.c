@@ -245,6 +245,7 @@ mdata_binary_t* init_analysis(const char *s)
     s_binary->dbi_handler->persistent_hook = (persistent_t* )calloc(1, sizeof(persistent_t));
 
     s_binary->exec_entry = 0x0;
+    // s_binary->dbi_handler->vbrk = (uint8_t* )(mmap(NULL, 0x5000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) + 0x5000);
     s_binary->debug_stream = stdout;
 
     s_binary->dbi_handler->cps_utils = (capstone_hanlder_t* )calloc(1, sizeof(capstone_hanlder_t));
@@ -323,30 +324,16 @@ int end_analysis(mdata_binary_t *s_binary)
         return -1;
     }
 
-    // int fd = open("/proc/self/maps", O_RDONLY);
-    // struct stat stat_maps = {0};
-
-    // if (fstat(fd, &stat_maps)) {
-    //     fprintf(stderr, "> @fstat has failed\n");
-    //     return -1;
-    // }
-
-    // if (-1 == munmap(s_binary->dbi_handler->maps, stat_maps.st_size)) {
-    //     return -1;
-    // }
-
     free(s_binary->dbi_handler->host_state);
     free(s_binary->dbi_handler->dump);
     free(s_binary->dbi_handler->restore);
     free(s_binary->dbi_handler->curr_hook);
     free(s_binary->dbi_handler->hashmap);
-    cs_free(s_binary->dbi_handler->cps_utils->insn, s_binary->dbi_handler->cps_utils->count);
     free(s_binary->dbi_handler->cps_utils);
     free(s_binary->dbi_handler);
     free(s_binary->fbinary);
     free(s_binary->s_ph);
     close(s_binary->fd);
-    free_memory_map(s_binary->memory_map);
 
     if (s_binary->interp) end_analysis(s_binary->interp);
     free(s_binary);
