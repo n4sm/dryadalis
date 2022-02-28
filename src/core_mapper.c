@@ -51,7 +51,6 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
 {
     uint64_t curr_map = 0x0;
     uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)))) + 1;
-
     if (!s_binary->base) {
         if (MAP_FAILED == (s_binary->base = (uint8_t* )mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), sz, PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
             return -1;
@@ -66,25 +65,25 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
     if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, 
                                 "[>] %lx - %lx %lx\n", 
                                 (uint64_t)(curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base), 
-                                (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz), 
+                                (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base) + PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1)), 
                                 sz);
 
     if (s_ph->p_memsz > s_ph->p_filesz && curr_map) {
         uint64_t map_filesz = curr_map + s_ph->p_filesz;
-        uint64_t map_end = PAGE_ROUND(map_filesz);
+        uint64_t map_end = PAGE_ROUND(map_filesz) + 1;
 
-        uint64_t bss_end = PAGE_ROUND((curr_map + s_ph->p_memsz));
+        uint64_t bss_end = PAGE_ROUND((curr_map + s_ph->p_memsz)) + 1;
 
         memset((void* )map_filesz,
                         0x0,
                         map_end - map_filesz);
 
         if (bss_end > map_end) {
-            if (MAP_FAILED == mmap((void *)map_end+1, PAGE_ROUND((bss_end - map_end)), PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
+            if (MAP_FAILED == mmap((void *)map_end, PAGE_ROUND((bss_end - map_end)) + 1, PROT_READ | _PROT_WRITE(s_ph->p_flags) | _PROT_EXEC(s_ph->p_flags), MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, -1, 0x0)) {
                 return -1;
             }
 
-            if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, "[>] %lx - %lx %lx\n", map_end+1, map_end+1 + PAGE_ROUND((bss_end - map_end)), PAGE_ROUND((bss_end - map_end))+1);
+            if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, "[>] %lx - %lx %lx\n", map_end, map_end + PAGE_ROUND((bss_end - map_end)) + 1, PAGE_ROUND((bss_end - map_end))+1);
 
             s_binary->dbi_handler->vbrk = (uint8_t* )((map_end + 1 + PAGE_ROUND((bss_end - map_end))) + 1);
             if (DEBUG & LOG_MAP) {

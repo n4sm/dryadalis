@@ -215,7 +215,6 @@ uint64_t hook_exit(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
     dbi_instr_t* dbi_handler = s_binary->dbi_handler;
 
-    // do_syscall(__NR_exit, state->rdi);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] exit (%lx)\n", state->rdi);
     dbi_handler->dtor();
     
@@ -257,14 +256,14 @@ uint64_t hook_close(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     // if it attempts to close stdout, we do not close it
-    if (state->rdi == 1) {
+    if (state->rdi == STDOUT_FILENO) {
         if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "> The guest attempts to close stdout, state->rax = 0\n");
 
         state->rax = 0;
     } else {
         do_syscall(__NR_close, state->rdi);
     }
-    
+
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] close (%lx) = %ld\n", state->rdi, state->rax);
 
     return 0;
@@ -287,13 +286,6 @@ uint64_t hook_mprotect(mdata_binary_t* s_binary)
     do_syscall(__NR_mprotect, state->rdi, state->rsi, state->rdx);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] mprotect (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
 
-    // if (-1 == update_vprot(s_binary, state->rdi, state->rsi, state->rdx)) {
-    //     fprintf(stderr, "> @hook_mprotect: failed to update_vprot\n");
-    //     fatal_dump(s_binary);
-    // }
-
-    // parse_maps(s_binary);
-
     return 0;
 }
 
@@ -302,7 +294,7 @@ uint64_t hook_pread64(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     do_syscall(__NR_pread64, state->rdi, state->rsi, state->rdx, state->r10);
-    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] pread64 (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] pread64 (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
 }
@@ -312,8 +304,6 @@ uint64_t hook_munmap(mdata_binary_t* s_binary) {
 
     do_syscall(__NR_munmap, state->rdi, state->rsi);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] munmap (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
-
-    // list_del_map(s_binary, PAGE_ALIGN(state->rdi), PAGE_ROUND(state->rsi) + 1);
 
     return 0;
 }
@@ -442,7 +432,7 @@ uint64_t hook_getpid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    do_syscall(__NR_getpid, state->rdi);
+    do_syscall(__NR_getpid);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] getpid () = %ld\n", state->rax);
 
     return 0;
@@ -452,7 +442,7 @@ uint64_t hook_gettid(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    do_syscall(__NR_gettid, state->rdi);
+    do_syscall(__NR_gettid);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] gettid () = %ld\n", state->rax);
 
     return 0;
