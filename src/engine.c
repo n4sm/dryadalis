@@ -891,7 +891,7 @@ void _dispatcher(mdata_binary_t* s_binary)
 
     s_binary->dbi_handler->state->rip = base_bbl - s_binary->dbi_handler->restore->length;
 
-    fflush(s_binary->debug_stream);
+    // fflush(s_binary->debug_stream);
     continue_exec(s_binary);
 }
 

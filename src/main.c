@@ -16,8 +16,8 @@ extern int bbl_count;
 
 int test(void* s_binary) 
 {
-    // printf("%d\n", bbl_count);
     bbl_count++;
+    // fprintf(((mdata_binary_t*)s_binary)->debug_stream, "> @test: %lx\n", ((mdata_binary_t*)s_binary)->dbi_handler->state->rflags);
     return 0;
 }
 

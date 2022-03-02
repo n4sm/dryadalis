@@ -39,9 +39,7 @@ _Bool must_change;
         fprintf(stderr, "FATAL arch_prctl\n"); \
         fatal_dump(s_binary); \
     } \
-    \
     state->rax = syscall(__VA_ARGS__); \
-    \
     if (-1 == set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) { \
         fprintf(stderr, "FATAL arch_prctl\n"); \
         fatal_dump(s_binary); \
@@ -232,7 +230,7 @@ uint64_t hook_exit_grp(mdata_binary_t* s_binary)
     return 0;
 }
 
-uint64_t hook_openat(mdata_binary_t* s_binary) 
+uint64_t hook_openat(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
@@ -422,7 +420,7 @@ uint64_t hook_futex(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    do_syscall(__NR_futex, state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9);
+    do_syscall(__NR_futex, state->rdi, state->rsi, state->rdx);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] futex (%lx, %lx, %lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->r8, state->r9, state->rax);
 
     return 0;
@@ -542,7 +540,7 @@ uint64_t hook_vfork(mdata_binary_t* s_binary)
 {
     state_rtime_t* state = s_binary->dbi_handler->state;
 
-    do_syscall(__NR_vfork);
+    do_syscall(__NR_fork);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] vfork () = %ld\n", state->rax);
 
     return 0;
@@ -613,7 +611,7 @@ uint64_t hook_lgetxattr(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     do_syscall(__NR_lgetxattr, state->rdi, state->rsi, state->rdx, state->r10);
-    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lgetxattr (%lx, %lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->r10, state->rax);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lgetxattr (\"%s\", \"%s\", %lx, %lx) = %ld\n", (const char* )state->rdi, (const char* )state->rsi, state->rdx, state->r10, state->rax);
 
     return 0;
 }
@@ -703,7 +701,7 @@ uint64_t hook_lstat(mdata_binary_t* s_binary)
     state_rtime_t* state = s_binary->dbi_handler->state;
 
     do_syscall(__NR_lstat, state->rdi, state->rsi);
-    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lstat (%lx, %lx) = %ld\n", state->rdi, state->rsi, state->rax);
+    if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] lstat (\"%s\", %lx) = %ld\n", (const char* )state->rdi, state->rsi, state->rax);
 
     return 0;
 }
@@ -925,10 +923,10 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary)
     switch (syscall_number) {
         case __NR_brk:
             return hook_brk;
-        
+
         case __NR_arch_prctl:
             return hook_arch_prctl;
-        
+
         case __NR_access:
             return hook_access;
 
@@ -1150,7 +1148,7 @@ hook_syscall get_syscall_hook(int syscall_number, mdata_binary_t* s_binary)
 
     default:
         fflush(stderr);
-        fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
+        if (DEBUG & LOG_SYSCALL) fprintf(stderr, "syscall [ %x ] isn't handled\n", syscall_number);
         return (hook_syscall )-1;
     }
 }

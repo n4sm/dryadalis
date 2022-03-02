@@ -50,7 +50,7 @@ mdata_binary_t* load_interp(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
 int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary) 
 {
     uint64_t curr_map = 0x0;
-    uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)))) + 1;
+    uint64_t sz = PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1;
     if (!s_binary->base) {
         if (MAP_FAILED == (s_binary->base = (uint8_t* )mmap((void* )(s_binary->pie ? base_address() : s_ph->p_vaddr), sz, PROT_READ | PROT_WRITE | _PROT_EXEC(s_ph->p_flags), MAP_FIXED | MAP_PRIVATE, s_binary->fd, PAGE_ALIGN(s_ph->p_offset)))) {
             return -1;
@@ -65,8 +65,8 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
     if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, 
                                 "[>] %lx - %lx %lx\n", 
                                 (uint64_t)(curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)s_binary->base), 
-                                (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base) + PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1)), 
-                                sz);
+                                (uint64_t)((curr_map ? PAGE_ALIGN(curr_map) + PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1 : (uint64_t)(s_binary->base) + PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1)), 
+                                PAGE_ROUND((PAGE_ROUND((curr_map + s_ph->p_filesz)) - PAGE_ALIGN(curr_map))) + 1);
 
     if (s_ph->p_memsz > s_ph->p_filesz && curr_map) {
         uint64_t map_filesz = curr_map + s_ph->p_filesz;
@@ -85,13 +85,13 @@ int map_load(Elf64_Phdr* s_ph, mdata_binary_t* s_binary)
 
             if (DEBUG & LOG_MAP) fprintf(s_binary->debug_stream, "[>] %lx - %lx %lx\n", map_end, map_end + PAGE_ROUND((bss_end - map_end)) + 1, PAGE_ROUND((bss_end - map_end))+1);
 
-            s_binary->dbi_handler->vbrk = (uint8_t* )((map_end + 1 + PAGE_ROUND((bss_end - map_end))) + 1);
+            s_binary->dbi_handler->vbrk = (uint8_t* )(map_end + PAGE_ROUND((bss_end - map_end)) + 1);
             if (DEBUG & LOG_MAP) {
                 fprintf(s_binary->debug_stream, "[>] s_binary->dbi_handler->vbrk: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
             }
         } else {
             if (s_ph->p_flags & PF_W) {
-                s_binary->dbi_handler->vbrk = (uint8_t* )((uint64_t)((curr_map ? PAGE_ALIGN(curr_map) : (uint64_t)(s_binary->base)) + sz) + 1);
+                s_binary->dbi_handler->vbrk = (uint8_t* )(map_end);
                 if (DEBUG & LOG_MAP) {
                     fprintf(s_binary->debug_stream, "[>] s_binary->dbi_handler->vbrk: %lx\n", (uint64_t)s_binary->dbi_handler->vbrk);
                 }
@@ -586,6 +586,8 @@ void exec_binary(mdata_binary_t* s_binary)
         "vzeroall\n"
         "push %%rax\n"
         "xor %%rax, %%rax\n"
+        "push %%rax\n"
+        "popfq\n"
         "ret\n"
         :: "r"(s_binary->dbi_handler->state->rip), "r"(s_binary->dbi_handler->state->rsp) :);
 }

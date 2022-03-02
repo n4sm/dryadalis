@@ -52,6 +52,8 @@ _Bool is_cflow(int group) {
     return false;
 }
 
+_Bool curr_syscall;
+
 /* 
     is_ret -  is the instruction a return instruction ?
 */
@@ -66,7 +68,6 @@ _Bool is_ret(int group) {
 _Bool is_call(int group) {
     return (group == X86_GRP_CALL);
 }
-
 
 /*
     is_interrupt - is the instruction an interrupt instruction
@@ -93,6 +94,7 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     uint8_t* insn_buf = insn_buffer;
 
     size_t size = PAGE_SZ;
+    size_t saved_size = PAGE_SZ;
     int n = 0;
 
     if (!is_mapped(addr, s_binary)) {
@@ -112,12 +114,12 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
 
     assert(size);
 
-    if (-1 == mem_read(s_binary, insn_buffer, addr, size)) {
+    if (-1 == (saved_size = mem_read(s_binary, insn_buffer, addr, size))) {
         fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
 		fatal_dump(s_binary);
     }
 
-    while(n < PAGE_SZ && cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
+    while(n < saved_size && cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
         s_binary->dbi_handler->cps_utils->count++;
         if (DEBUG & LOG_INSN) {
             fprintf(s_binary->debug_stream, 
@@ -130,12 +132,17 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
 
         for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
             if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i])) {
-                return n;
+                if (beg && curr_syscall) {
+                    continue;
+                } else {
+                    return n;
+                }
             }
         }
 
         n += s_binary->dbi_handler->cps_utils->insn->size;
         beg = false;
+        curr_syscall = false;
     }
 
     if (is_mapped((saved_addr + n), s_binary) && n) {
@@ -220,10 +227,8 @@ _Bool is_jmp_taken(int id, mdata_binary_t* s_binary)
             return (is_set(s_binary, SF) == is_set(s_binary, OF));
 
         case X86_INS_JL:
-            // if (DEBUG) fprintf(s_binary->debug_stream, "\teflags & SF != elfags & OF <=> %lx & %x != %lx & %x\n", eflags, SF, elfags, OF);
             return (is_set(s_binary, SF) != is_set(s_binary, OF));
         case X86_INS_JLE:
-            // if (DEBUG) fprintf(s_binary->debug_stream, "\teflags & %d || eflags & %d != elfags & %d\n", ZF, SF, OF);
             return is_set(s_binary, ZF) || is_set(s_binary, SF) != is_set(s_binary, OF);
 
         case X86_INS_JO:
@@ -390,8 +395,8 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                 return (uint64_t)(instruction + sz);
             }
 
-            // printf("syscall %lx not handled\n", s_binary->dbi_handler->state->rax);
-            exit(EXIT_FAILURE);
+            curr_syscall = true;
+            return (uint64_t)(instruction);
         }
     }
 

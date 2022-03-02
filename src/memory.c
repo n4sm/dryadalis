@@ -135,7 +135,13 @@ int mem_read(mdata_binary_t* s_binary, void* to, uint64_t from, size_t size)
     int k = 0;
     uint64_t _sz = 0;
 
-    assert(size);
+    if (!size) {
+        return 0;
+    }
+
+    while (!is_mapped_range(s_binary, PAGE_ALIGN(from), PAGE_ROUND((size + PAGE_OFFT(from))) + 1)) {
+        size = (PAGE_ROUND((size + PAGE_OFFT(from))) + 1) - PAGE_SZ;
+    }
 
     if (!is_mapped_range(s_binary, PAGE_ALIGN(from), PAGE_ROUND((size + PAGE_OFFT(from))))) {
         fprintf(stderr, "> @is_mapped_range > @mem_read: %lx -> %lx - %lx\n", PAGE_ALIGN(from), from, size);
