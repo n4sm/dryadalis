@@ -102,15 +102,15 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         return -1;
     }
 
-    /* overloapping instruction */
-    if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= PAGE_SZ) {
-        /* We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes */
-        if (!is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
-            size = PAGE_SZ - PAGE_OFFT(addr);
-        } else {
-            size = PAGE_SZ;
-        }
-    }
+    // /* overloapping instruction */
+    // if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= PAGE_SZ) {
+    //     /* We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes */
+    //     if (!is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
+    //         size = PAGE_SZ - PAGE_OFFT(addr);
+    //     } else {
+    //         size = PAGE_SZ;
+    //     }
+    // }
 
     assert(size);
 
