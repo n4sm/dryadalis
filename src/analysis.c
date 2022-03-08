@@ -295,6 +295,45 @@ long sign_extend(size_t size, uint64_t value)
 }
 
 
+uint64_t ___eval_target_type(mdata_binary_t* s_binary, cs_x86_op* operand, _Bool is_rel, size_t sz) 
+{
+    switch (operand->type) {
+        uint64_t base, index;
+        case X86_OP_REG:
+            return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
+        case X86_OP_IMM:
+            if (is_rel) return (uint64_t)(operand->imm + s_binary->dbi_handler->state->rip);
+            return (uint64_t)operand->imm;
+        case X86_OP_MEM:
+            // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
+            base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
+            if (operand->mem.index != X86_REG_INVALID) {
+                index = read_reg(operand->mem.index, s_binary->dbi_handler->hashmap);
+            } else {
+                index = 0x0;
+            }
+
+            if (-1 != base && -1 != index) {
+                if (operand->mem.base == X86_REG_RIP) {
+                    base += sz;
+                }
+
+                if (DEBUG & LOG_JMP) {
+                    fprintf(s_binary->debug_stream, "(base [ %x ] => [ %lx ], index [ %x ] => [ %lx ], scale [ %x ], disp [ %lx ]) => %lx\n", operand->mem.base, base, operand->mem.index, index, operand->mem.scale, operand->mem.disp, (base + (index * operand->mem.scale) + operand->mem.disp));
+                }
+
+                return *((uint64_t* )(base + index * operand->mem.scale + operand->mem.disp));
+            }
+
+            fprintf(stderr, "failed to read registers, base [ %x ] => [ %lx ], index [ %x ] => [ %lx ]\n", operand->mem.base, base, operand->mem.index, index);
+            return -1;
+
+        default:
+            fprintf(stderr, "error operand jmp\n");
+            return -1;
+    }
+}
+
 /*
     __eval_target - returns the actual target for the @insn
     @s_binary: object descriptor
@@ -305,7 +344,81 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
 {
     cs_detail* details = insn->detail;
     cs_x86* x86 = &(details->x86);
+
     _Bool achieve = false;
+    // _Bool is_rel = false;
+    // _Bool is_call = false;
+    // _Bool is_jmp = false;
+    // _Bool is_ret = false;
+    // _Bool is_syscall = false;
+
+    // for (size_t i = 0; i < details->groups_count; i++) {
+    //     switch (details->groups[i]) {
+    //         case X86_GRP_JUMP:
+    //             is_jmp = true;
+    //             break;
+    //         case X86_GRP_CALL:
+    //             is_call = true;
+    //             break;
+    //         case X86_GRP_RET:
+    //             is_ret = true;
+    //             break;
+    //         case X86_GRP_BRANCH_RELATIVE:
+    //             is_rel = true;
+    //             break;
+    //         case X86_GRP_INT:
+    //             is_syscall = true;
+    //             break;
+    //         default:
+    //             break;
+    //     }
+    // }
+
+    // if (is_call || (is_jmp && is_jmp_taken(insn->id, s_binary))) {
+    //     cs_x86_op* operand = &(x86->operands[0]);
+
+    //     return ___eval_target_type(s_binary, operand, is_rel, insn->size);
+    // } else if (is_jmp && !is_jmp_taken(insn->id, s_binary)) {
+    //     // jmp not taken
+    //     if (DEBUG & LOG_JMP) {
+    //         fprintf(s_binary->debug_stream, " not taken ");
+    //     }
+
+    //     return (uint64_t)(instruction + insn->size);
+    // }
+
+    // if (is_ret) {
+    //     s_binary->dbi_handler->state->rsp += 8;
+    //     return *((uint64_t* )(read_reg(X86_REG_RSP, s_binary->dbi_handler->hashmap)-8));
+    // } else if (is_syscall) {
+    //     hook_syscall sys_callback = NULL;
+    //     uint64_t ret = 0x0;
+    //     size_t sz = insn->size;
+
+    //     if ((hook_syscall)-1 != (sys_callback = get_syscall_hook(s_binary->dbi_handler->state->rax, s_binary))) {
+
+    //         if (set_fs_gs((void* )s_binary->dbi_handler->instrumented_fs, (void* )s_binary->dbi_handler->instrumented_gs)) {
+    //             fprintf(stderr, "FATAL arch_prctl\n");
+    //         }
+
+    //         ret = sys_callback(s_binary);
+
+    //         if (set_fs_gs((void* )s_binary->dbi_handler->host_state->fs, (void* )s_binary->dbi_handler->host_state->gs)) {
+    //             fprintf(stderr, "FATAL arch_prctl\n");
+    //             fatal_dump(s_binary);
+    //         }
+
+    //         if (ret) {
+    //             // if the control flow is broken we jump on a particular location returned by sys_callback when the return value is != 0
+    //             return ret;
+    //         }
+
+    //         return (uint64_t)(instruction + sz);
+    //     }
+
+    //     curr_syscall = true;
+    //     return (uint64_t)(instruction);
+    // }
 
     for (size_t i = 0; i < details->groups_count; i++) {
         if (details->groups[i] == X86_GRP_JUMP || details->groups[i] == X86_GRP_BRANCH_RELATIVE || is_call(details->groups[i])) {
@@ -329,7 +442,7 @@ uint64_t __eval_target(cs_insn* insn, mdata_binary_t* s_binary, uint64_t instruc
                     case X86_OP_REG:
                         return read_reg(operand->reg, s_binary->dbi_handler->hashmap);
                     case X86_OP_IMM:
-                        return (uint64_t)(sign_extend(operand->size, operand->imm) + s_binary->dbi_handler->state->rip);
+                        return (uint64_t)(operand->imm + s_binary->dbi_handler->state->rip);
                     case X86_OP_MEM:
                         // no need to perform checks about the sanity of the index, base & segment registers cause if a reg is invalid it will return 0
                         base = read_reg(operand->mem.base, s_binary->dbi_handler->hashmap);
