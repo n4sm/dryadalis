@@ -14,10 +14,15 @@
 
 extern int bbl_count;
 
+
+// basic callback that is dumping the registers state at the start of a new basic block
 int test(void* s_binary) 
 {
     bbl_count++;
-    // fprintf(((mdata_binary_t*)s_binary)->debug_stream, "> @test: %lx\n", ((mdata_binary_t*)s_binary)->dbi_handler->state->rflags);
+    
+//    fprintf(((mdata_binary_t*)s_binary)->debug_stream, "> @bbl: %d, rip: %lx\n", bbl_count, ((mdata_binary_t*)s_binary)->dbi_handler->state->rip);
+//    log_regs(s_binary, ((mdata_binary_t*)s_binary)->debug_stream);   
+ 
     return 0;
 }
 
@@ -29,7 +34,7 @@ int main(int argc, char **argv)
 
     mdata_binary_t *s_binary = NULL;
     arg_t arguments = {.argc = argc, .argv = argv};
-    request_t req = {.callback = test, .address = 0x0, .type = INSTRUMENT_BBL};
+    request_t req = {.callback = test, .address = 0, .type = INSTRUMENT_BBL};
     if (-1 == (long)(s_binary = map_binary(argv[1], &arguments))) {
         return -1;
     }

@@ -258,7 +258,7 @@ mdata_binary_t* init_analysis(const char *s)
     s_binary->dbi_handler->cps_utils->insn = cs_malloc(s_binary->dbi_handler->cps_utils->handle);
     s_binary->dbi_handler->cps_utils->instructions = NULL;
 
-    s_binary->dbi_handler->fd_umaps = open("/dev/umaps", O_RDONLY);
+    s_binary->dbi_handler->fd_umaps -1; // = open("/dev/umaps", O_RDONLY);
 
     if (!s_binary->dbi_handler->cps_utils->insn) {
         fprintf(stderr, "> @init_analysis > @cs_malloc\n");

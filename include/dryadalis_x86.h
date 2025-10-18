@@ -36,7 +36,7 @@
 #define INSTRUMENTED_FS 0x14f0000
 #define INSTRUMENTED_GS 0x15f000
 
-#define STACK_SZ 0X50000
+#define STACK_SZ 0x50000 
 
 #define LOG_SYSCALL 0x1
 #define LOG_INSN 0x10

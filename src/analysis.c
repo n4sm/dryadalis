@@ -44,6 +44,8 @@ _Bool is_cflow(int group) {
             return true;
         case X86_GRP_IRET:
             return true;
+	case X86_GRP_VM:
+	    return true;
 
         default:
             break;
@@ -102,9 +104,9 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
         return -1;
     }
 
-    // /* overloapping instruction */
+    //  overloapping instruction 
     // if (PAGE_OFFT(addr) + INSTRUCTION_MAX_SZ >= PAGE_SZ) {
-    //     /* We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes */
+    //     We work on only on a buffer of PAGE_SZ - PAGE_OFFSET(addr) bytes
     //     if (!is_mapped(PAGE_ALIGN(addr) + PAGE_SZ, s_binary)) {
     //         size = PAGE_SZ - PAGE_OFFT(addr);
     //     } else {
@@ -155,8 +157,76 @@ int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg)
     }
 
     fprintf(stderr, "FATAL found nothing\n");
+    fatal_dump(s_binary);
     return -1;
 }
+
+/*int opcodes_cflow(uint64_t addr, mdata_binary_t* s_binary, _Bool beg) 
+{
+    uint8_t insn_buffer[PAGE_SZ] = {0};
+    uint64_t saved_addr = addr;
+    uint8_t* insn_buf = insn_buffer;
+
+    size_t size = PAGE_SZ;
+    size_t saved_size = PAGE_SZ;
+    int n = 0;
+
+    assert(size);
+
+    if (-1 == (saved_size = mem_read(s_binary, insn_buffer, addr, size))) {
+        fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
+		fatal_dump(s_binary);
+    }
+
+    while(n < PAGE_SZ && cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
+        s_binary->dbi_handler->cps_utils->count++;
+        if (DEBUG & LOG_INSN) {
+            fprintf(s_binary->debug_stream, 
+                    "0x%lx\t%s %s, sz: %dm n=%d\n", 
+                    s_binary->dbi_handler->cps_utils->insn->address, 
+                    s_binary->dbi_handler->cps_utils->insn->mnemonic, 
+                    s_binary->dbi_handler->cps_utils->insn->op_str,
+                    s_binary->dbi_handler->cps_utils->insn->size, n
+                );
+        }
+
+        for (size_t i = 0; i < s_binary->dbi_handler->cps_utils->insn->detail->groups_count; i++) {
+            if (is_cflow(s_binary->dbi_handler->cps_utils->insn->detail->groups[i])) {
+                    return n;
+            }
+        }
+
+        n += s_binary->dbi_handler->cps_utils->insn->size;
+    }
+
+    if (-1 == mem_read(s_binary, insn_buffer, saved_addr, saved_size)) {
+        fprintf(stderr, "> @opcodes_cflow: failed to read at %lx\n", addr);
+                fatal_dump(s_binary);
+    }
+
+
+    if (!cs_disasm_iter(s_binary->dbi_handler->cps_utils->handle, (const uint8_t **)&insn_buf, &size, &addr, s_binary->dbi_handler->cps_utils->insn)) {
+    	fprintf(s_binary->debug_stream,
+                    "Failed to disass: \n");
+
+	int count = cs_disasm(s_binary->dbi_handler->cps_utils->handle, insn_buffer, 0x1000, 0x1000, 0, &s_binary->dbi_handler->cps_utils->insn);
+
+	if (count > 0) {
+		size_t j;
+		for (j = 0; j < count; j++) {
+			printf("0x%"PRIx64":\t%s\t\t%s\n", s_binary->dbi_handler->cps_utils->insn[j].address, s_binary->dbi_handler->cps_utils->insn[j].mnemonic,
+					s_binary->dbi_handler->cps_utils->insn[j].op_str);
+		}
+	
+	    __asm__ __volatile__("int3");
+	}
+    }
+    fprintf(stderr, "FATAL found nothing on this page\n");
+    fatal_dump(s_binary);
+    return -1;
+}*/
+
+
 
 /* insn_len - returns the length of the instruction for which target points to
     @target: address of the target instruction
@@ -171,6 +241,11 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
     uint32_t sz_ret = 0;
 
     cs_insn* insn_d = cs_malloc(handle);
+
+    if (!insn_d) {
+    	fprintf(stderr, "> @ca_malloc failed\n");
+	exit(-1);
+    }
 
     if (!is_mapped_range(s_binary, target, INSTRUCTION_MAX_SZ)) {
         fprintf(stderr, "> @ins_len > @is_mapped_range: %lx isn't mapped\n", target);
@@ -187,7 +262,7 @@ off_t insn_len(uint64_t target, mdata_binary_t* s_binary)
     }
 
     fprintf(stderr, "> @ins_len > @cs_disasm_iter: failed to disassemble at %lx\n", target);
-    cs_free(insn_d, 1);
+    cs_free(insn_d, 0);
     return -1;
 }
 

@@ -133,7 +133,7 @@ uint64_t hook_arch_prctl(mdata_binary_t* s_binary)
             break;
 
         case ARCH_CET_STATUS:
-            memcpy(code_debug, "ARCH_CET_STATUS", strlen("ARCH_MAP_VDSO_X32\0"));
+            memcpy(code_debug, "ARCH_CET_STATUS", strlen("ARCH_CET_STATUS\0"));
             break;
 
         default:
@@ -183,6 +183,10 @@ uint64_t hook_mmap(mdata_binary_t* s_binary)
 
     do_syscall(__NR_mmap, addr, length, prot, flags, fd, offt);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] mmap (%lx, %lx, %x, %d, %x) = %lx\n", addr, length, prot, fd, offt, state->rax);
+
+    if (-1 == state->rax) {
+    	fatal_dump(s_binary);
+    }
 
     // if (-1 != state->rax && (!state->rdi || !is_mapped_range(s_binary, state->rdi, length))) {
     //     list_add_map(s_binary, prot, state->rax, PAGE_ROUND(length) + 1);
@@ -482,6 +486,7 @@ uint64_t hook_write(mdata_binary_t* s_binary)
 
     do_syscall(__NR_write, state->rdi, state->rsi, state->rdx);
     if (DEBUG & LOG_SYSCALL) fprintf(s_binary->debug_stream, "[ . ] write (%lx, %lx, %lx) = %ld\n", state->rdi, state->rsi, state->rdx, state->rax);
+
 
     return 0;
 }

@@ -14,8 +14,6 @@
 
 #include "../include/dryadalis_x86.h"
 
-/* Dieu et le Roy */
-
 static char* _random = "fae5fff9bdaa059af959baedeac94d30";
 static char* s_arch = "x86_64\0"; 
 
@@ -199,6 +197,7 @@ uint64_t* setup_stack(char **argv, mdata_binary_t* s_binary, int argc)
     if (-1 == (long)(stack = map_stack())) {
         return (uint64_t*)-1;
     }
+
 
     // we setup the rsp register directly in the structure, that's the only register setup by the mapping engine with rip
     s_binary->dbi_handler->base_guest_stack = (uint64_t)stack - 0x200000;
@@ -403,12 +402,12 @@ _Bool is_mapped(uint64_t addr, mdata_binary_t* s_binary)
 {
     umaps_request_t req = {.addr = addr, .size = PAGE_SZ};
 
-    if (-1 == ioctl(s_binary->dbi_handler->fd_umaps, UMAPS_IS_MAPPED, &req)) {
+    /*if (-1 == ioctl(s_binary->dbi_handler->fd_umaps, UMAPS_IS_MAPPED, &req)) {
         fprintf(stderr, "> @is_mapped: failed to check if %lx is mapped\n", addr);
         fatal_dump(s_binary);
-    }
+    }*/
 
-    return (_Bool)req.result;
+    return (_Bool)true;
 }
 
 // // check if @addr argument is in the doubly linked list memory_map 

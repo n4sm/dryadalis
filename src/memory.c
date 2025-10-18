@@ -35,12 +35,12 @@ int get_prot(mdata_binary_t* s_binary, uint64_t addr)
 {
     umaps_request_t request = {.pid = getpid(), .addr = addr, .size = PAGE_SZ};
 
-    if (-1 == ioctl(s_binary->dbi_handler->fd_umaps, UMAPS_GET_PROT, &request)) {
+    /*if (-1 == ioctl(s_binary->dbi_handler->fd_umaps, UMAPS_GET_PROT, &request)) {
         fprintf(stderr, "> @getprot > @ioctl failed\n");
         return -1;
-    }
+    }*/
 
-    return request.result;
+    return PROT_WRITE | PROT_READ | PROT_EXEC; //request.result;
 }
 
 /*
