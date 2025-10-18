@@ -2,7 +2,7 @@ Long time ago I started to write this DBI engine based on capstone and keystone.
 - AVX / AVX2
 - statically linked binaries
 
-For some reasons it is failing on recent dynamically linked binaries.
+For some reasons it is failing against recent dynamically linked binaries.
 
 # Basic usage
 
